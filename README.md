@@ -14,11 +14,7 @@ session.
 
 ## Screenshots
 
-_Overview page, Chinese UI._
-
-![Session board overview — Chinese UI](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-zh.png)
-
-_Overview page, English UI._
+_Overview page._
 
 ![Session board overview — English UI](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-en.png)
 

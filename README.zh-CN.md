@@ -12,13 +12,9 @@
 
 ## 截图
 
-_概览页，中文界面。_
+_概览页。_
 
 ![会话看板概览 — 中文界面](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-zh.png)
-
-_概览页，英文界面。_
-
-![会话看板概览 — 英文界面](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-en.png)
 
 ## 目录
 
