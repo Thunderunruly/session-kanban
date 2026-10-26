@@ -47,8 +47,9 @@ _Overview page, English UI._
   working directory, running state; click a card (or press Enter/Space) to open the session.
 - **Quick actions** — pin / unpin, inline rename, fork, copy Session ID, archive (with
   confirmation), refresh and new session. Sessions owned by subagent routing cannot be
-  renamed (the action is disabled). Archiving the Session currently held by the main view
-  reopens the board afterwards instead of leaving the user on the new-session home.
+  renamed: the action is disabled and hovering it explains why. Archiving the Session
+  currently held by the main view reopens the board afterwards instead of leaving the user
+  on the new-session home.
 - **Tabs and search** — Overview / All / Running / With-todos / Completed, plus a search
   box that filters both the board and the overview aggregates. The three content tabs
   partition every visible session: Completed is the catch-all for sessions with no
@@ -61,7 +62,9 @@ _Overview page, English UI._
   can be matched to their parent regardless of order.
 - **Filters** — the Agent Team scope (when teams exist) and a Workspace filter (defaults
   to **All workspaces**, hidden when the host has only one Workspace, persisted across
-  reloads) combine with the tabs and search.
+  reloads) combine with the tabs and search. Sessions the host does not account to a
+  Workspace directly — subagent, team member and fork children — inherit their parent
+  Session's Workspace, so they stay visible under that filter.
 - **Adaptive dropdowns** — selects reuse the host `Menu` primitive, measure the free space
   beside the trigger and open above or below it, with long lists scrolling inside the card.
 - **Native look** — card hover actions reuse the native Session-row action geometry and the

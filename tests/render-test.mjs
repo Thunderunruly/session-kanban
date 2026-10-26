@@ -379,6 +379,14 @@ if (!/disabled=""[^>]*aria-label="子代理会话的标题由路由管理，无�
   && !/aria-label="子代理会话的标题由路由管理，无法重命名"[^>]*disabled=""/.test(zhMarkup)) {
   throw new Error('subagent rename action is not rendered disabled');
 }
+// The hover tooltip must still explain the unavailable action, so the disabled
+// icon is wrapped in a tooltip anchor that receives the pointer events.
+if (!zhMarkup.includes('skb-icon-btn-wrap')) {
+  throw new Error('subagent rename action has no hover anchor');
+}
+if (!zhMarkup.includes('data-tip="子代理会话的标题由路由管理，无法重命名"')) {
+  throw new Error('subagent rename hover explanation missing');
+}
 if (!zhMarkup.includes('aria-label="分叉会话"')) throw new Error('fork action missing');
 if (!zhMarkup.includes('aria-label="复制 Session ID"')) throw new Error('copy action missing');
 if (!zhMarkup.includes('aria-label="取消置顶"')) throw new Error('unpin action missing for the pinned card');
@@ -758,7 +766,7 @@ const workspaceSnapshot = {
   pinnedSessionIds: [],
   archivedSessionIds: [],
   items: [
-    { workspaceId: 'ws-alpha', path: 'F:\\GitLab\\alpha', title: 'Alpha 项目', sessionIds: ['s-team-lead', 's-team-a'] },
+    { workspaceId: 'ws-alpha', path: 'F:\\GitLab\\alpha', title: 'Alpha 项目', sessionIds: ['s-team-lead'] },
     { workspaceId: 'ws-beta', path: 'F:\\GitLab\\beta', title: 'Beta 项目', sessionIds: ['s-plain'] },
   ],
 };
@@ -778,6 +786,17 @@ const workspaceBetaMarkup = ReactDOMServer.renderToStaticMarkup(React.createElem
 if (!workspaceBetaMarkup.includes('Beta')) throw new Error('workspace filter trigger label missing');
 if (!workspaceBetaMarkup.includes('普通会话')) throw new Error('workspace filter lost its session');
 if (workspaceBetaMarkup.includes('团队 Lead 会话')) throw new Error('workspace filter leaked another workspace');
+
+// Child sessions are not listed in the host Workspace accounting; they inherit the
+// parent's Workspace so the filter still shows them.
+globalThis.window.localStorage.store.set('dsh.session-kanban.workspace.v1', 'ws-alpha');
+const workspaceAlphaCtx = makeContext(teamSnapshot, 'zh', workspaceSnapshot);
+client.apply(workspaceAlphaCtx.ctx);
+const workspaceAlphaMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(workspaceAlphaCtx.getRegistered()[0].component, { ctx: workspaceAlphaCtx.ctx }));
+for (const needle of ['团队 Lead 会话', '队友 A 会话', '队友 B 会话']) {
+  if (!workspaceAlphaMarkup.includes(needle)) throw new Error(`workspace filter lost an inherited child session: ${needle}`);
+}
+if (workspaceAlphaMarkup.includes('普通会话')) throw new Error('workspace filter leaked a session from another workspace');
 console.log('workspace filter OK');
 
 // Registration shape and localized sidebar label.

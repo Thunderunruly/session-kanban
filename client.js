@@ -1551,7 +1551,8 @@ window.__ModuleLoader__.load({
 .skb-icon-btn:hover{color:var(--dsw-alias-label-primary)}
 .skb-icon-btn:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px}
 .skb-icon-btn.is-active{color:var(--dsw-alias-label-primary)}
-.skb-icon-btn[disabled]{opacity:.5;cursor:default}
+.skb-icon-btn[disabled]{opacity:.5;cursor:default;pointer-events:none}
+.skb-icon-btn-wrap{display:inline-flex;align-items:center;flex:none;cursor:default}
 .skb-confirm{display:flex;align-items:center;gap:6px}
 .skb-confirm-text{font-size:11.5px;color:var(--dsw-alias-state-warn-primary);white-space:nowrap}
 .skb-confirm .skb-btn{height:26px;padding:0 9px;font-size:12px}
@@ -1656,14 +1657,6 @@ window.__ModuleLoader__.load({
           : [];
         return items.filter((item) => item && typeof item.workspaceId === 'string' && item.workspaceId.length > 0);
       }, [workspaceSnapshot]);
-      const workspaceOf = useMemo(() => {
-        const map = new Map();
-        for (const workspace of workspaces) {
-          const ids = Array.isArray(workspace.sessionIds) ? workspace.sessionIds : [];
-          for (const id of ids) map.set(id, workspace.workspaceId);
-        }
-        return map;
-      }, [workspaces]);
 
       const boundT = useMemo(() => {
         void localeTick;
@@ -1741,6 +1734,40 @@ window.__ModuleLoader__.load({
         });
         return built;
       }, [sessionSnapshot, overlayTick, boundT, pinnedOrder, archivedIds]);
+
+      // The host Workspace registry accounts top-level Sessions; subagent, team
+      // member and fork children are not listed in `workspace.sessionIds`. Resolve
+      // them through the parent chain so a Workspace filter keeps its child Sessions
+      // visible instead of hiding them behind their parent.
+      const workspaceOf = useMemo(() => {
+        const resolved = new Map();
+        for (const workspace of workspaces) {
+          const ids = Array.isArray(workspace.sessionIds) ? workspace.sessionIds : [];
+          for (const id of ids) resolved.set(id, workspace.workspaceId);
+        }
+        const parentOf = new Map(rows.map((row) => [row.sessionId, row.parentId || '']));
+        const cache = new Map();
+        const resolve = (sessionId, visiting) => {
+          if (resolved.has(sessionId)) return resolved.get(sessionId);
+          if (cache.has(sessionId)) return cache.get(sessionId);
+          const parentId = parentOf.get(sessionId) || '';
+          if (!parentId || visiting.has(sessionId)) {
+            cache.set(sessionId, '');
+            return '';
+          }
+          visiting.add(sessionId);
+          const workspaceId = resolve(parentId, visiting);
+          visiting.delete(sessionId);
+          cache.set(sessionId, workspaceId);
+          return workspaceId;
+        };
+        for (const row of rows) {
+          if (resolved.has(row.sessionId)) continue;
+          const workspaceId = resolve(row.sessionId, new Set());
+          if (workspaceId) resolved.set(row.sessionId, workspaceId);
+        }
+        return resolved;
+      }, [rows, workspaces]);
 
       const teamInfo = useMemo(() => {
         const teams = [];
@@ -2728,21 +2755,31 @@ window.__ModuleLoader__.load({
         const relation = relations.get(row.sessionId);
         const timeText = relativeTime(row.updatedAt, boundT);
         /** One hover action: native row-action geometry plus the native Tooltip bubble. */
-        const actionButton = (key, label, icon, onClick, extraClass, disabled, ariaLabel) => h(Tooltip, {
-          key,
-          label: ariaLabel || label,
-          side: 'bottom',
-          align: 'end',
-          delayMs: 500,
-          portal: true,
-        }, h('button', {
-          key: `${key}-button`,
-          type: 'button',
-          className: `skb-icon-btn${extraClass || ''}`,
-          'aria-label': ariaLabel || label,
-          disabled: isBusy || disabled === true,
-          onClick,
-        }, icon));
+        const actionButton = (key, label, icon, onClick, extraClass, disabled, ariaLabel) => {
+          const disabledNow = isBusy || disabled === true;
+          const button = h('button', {
+            key: `${key}-button`,
+            type: 'button',
+            className: `skb-icon-btn${extraClass || ''}`,
+            'aria-label': ariaLabel || label,
+            disabled: disabledNow,
+            onClick,
+          }, icon);
+          // A disabled <button> swallows pointer events, so the unavailable action
+          // (e.g. renaming a subagent-owned session) gets a wrapper as the tooltip
+          // anchor; hovering the disabled icon still explains why it cannot be used.
+          const anchor = disabled === true
+            ? h('span', { key: `${key}-anchor`, className: 'skb-icon-btn-wrap' }, button)
+            : button;
+          return h(Tooltip, {
+            key,
+            label: ariaLabel || label,
+            side: 'bottom',
+            align: 'end',
+            delayMs: 500,
+            portal: true,
+          }, anchor);
+        };
         return h('article', {
           key: row.sessionId,
           className: `skb-card${row.running ? ' is-running' : ''}${relation && relation.parentId ? ' is-child' : ''}${relation && relation.childCount > 0 ? ' is-parent' : ''}`,
