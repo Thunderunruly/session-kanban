@@ -18,7 +18,9 @@ glance, one click to jump back into the session.
 - **Quick actions** — pin / unpin, inline rename, fork, copy Session ID, archive (with
   confirmation), refresh, new session.
 - **Tabs & search** — Overview / All / Running / With-todos / Completed, plus a search box
-  that filters both the board and the overview aggregates.
+  that filters both the board and the overview aggregates. Running, With-todos and
+  Completed cover every visible session: Completed also holds sessions without a todo
+  list (or whose details have not loaded yet), so nothing is left only in All.
 - **Team scope** — filter the board by an Agent Team's member sessions when teams exist.
 - **Workday calendar by country** — chooses the working calendar used by the heatmap
   shading; configured in DSH **Settings → General** (`工作日国家/地区`). 24 countries, China
@@ -143,6 +145,8 @@ DeepSeek Harness（DSH）本地插件：在 Web UI 左侧栏增加「会话看�
 - 概览首页：会话总数、进行中数量、待办完成率、GitHub 风格活跃热力图（年/月/周/日）。
 - 卡片支持置顶、重命名、分叉、复制 Session ID、归档、刷新、新建会话。
 - Tab：概览 / 全部 / 进行中 / 有待办 / 已完成；搜索同时过滤列表与概览统计；有团队时可按团队过滤。
+  进行中 / 有待办 / 已完成 覆盖全部会话：没有待办清单（或详情尚未加载）的会话归入「已完成」，
+  不会只出现在「全部」里。
 - **工作日国家/地区**在「设置 → 通用设置」中配置，默认中国。有法定调休/补班或替代休日的国家
   使用各自的专门数据源：中国（holiday-cn，含调休补班）、日本（holiday-jp，含振替休日/国民休日）、
   韩国（holidays-kr，含替代休日）、俄罗斯（isdayoff.ru 生产日历，含调休工作日）；

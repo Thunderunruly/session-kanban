@@ -424,15 +424,19 @@ const fallbackMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(f
 if (!fallbackMarkup.includes('会话总数')) throw new Error('invalid stored tab did not fall back to overview');
 if (fallbackMarkup.includes('<article')) throw new Error('overview fallback rendered list cards');
 
-// "done" tab holds fully completed todo lists only.
+// "done" is the catch-all: sessions with no unfinished todos, including sessions
+// without a todo list or without loaded details, but never a running session.
 globalThis.window.localStorage.store.set('dsh.session-kanban.filter.v2', 'done');
 const doneCtx = makeContext(snapshot, 'zh');
 client.apply(doneCtx.ctx);
 const doneMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(doneCtx.getRegistered()[0].component, { ctx: doneCtx.ctx }));
 if (!doneMarkup.includes('已全部完成')) throw new Error('done tab lost the completed session');
-if (doneMarkup.includes('实现左侧栏会话看板')) throw new Error('done tab still shows an unfinished session');
+if (!doneMarkup.includes('修复 BLE 断连')) throw new Error('done tab lost a session without a todo list');
+if (!doneMarkup.includes('旧会话')) throw new Error('done tab lost a session without loaded details');
+if (doneMarkup.includes('实现左侧栏会话看板')) throw new Error('done tab still shows a running session');
+if (doneMarkup.includes('待办较多')) throw new Error('done tab still shows a session with unfinished todos');
 
-// "todos" tab keeps sessions with unfinished todos only.
+// "todos" tab keeps sessions with unfinished todos only (running sessions included).
 globalThis.window.localStorage.store.set('dsh.session-kanban.filter.v2', 'todos');
 const todosCtx = makeContext(snapshot, 'zh');
 client.apply(todosCtx.ctx);

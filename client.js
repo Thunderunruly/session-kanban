@@ -488,7 +488,10 @@ window.__ModuleLoader__.load({
         }
       }
     }
-    const DETAIL_BUDGET = 80;
+    // Detail budget: enough projected sessions that the Running / With-todos /
+    // Completed tabs can classify a normal catalog; sessions beyond it stay in the
+    // Completed bucket until their details arrive, so no row is ever uncategorized.
+    const DETAIL_BUDGET = 200;
     const PAGE_SIZE = 60;
     const MIN_CARD_WIDTH = 320;
     const GRID_GAP = 14;
@@ -1774,9 +1777,13 @@ window.__ModuleLoader__.load({
       const runningCount = scopedRows.filter((row) => row.running).length;
       const filtered = useMemo(() => (
         searchedRows.filter((row) => {
-          if (filter === 'running' && !row.running) return false;
-          if (filter === 'todos' && !(row.total > 0 && row.completed < row.total)) return false;
-          if (filter === 'done' && !(row.total > 0 && row.completed >= row.total)) return false;
+          // The content tabs partition every visible Session: Running, then
+          // With-todos, then Completed as the catch-all for sessions with no
+          // unfinished todos (all-done, no todo list, or details not loaded yet).
+          if (filter === 'running') return row.running;
+          const pending = row.total > 0 && row.completed < row.total;
+          if (filter === 'todos') return pending;
+          if (filter === 'done') return !row.running && !pending;
           return true;
         })
       ), [searchedRows, filter]);
