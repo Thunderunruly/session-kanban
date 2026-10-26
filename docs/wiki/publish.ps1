@@ -4,8 +4,10 @@
 Publish the Markdown sources in this folder to the GitHub Wiki.
 
 .DESCRIPTION
-Clones <owner>/<repo>.wiki.git, copies every page from this directory (except
-README.md, which documents the workflow), then commits and pushes.
+Clones <owner>/<repo>.wiki.git, then copies:
+  - every page in this folder except README.md (Chinese pages, Chinese file names);
+  - every page in ./en (English pages, published under their English names);
+then commits and pushes.
 
 The wiki repository only exists after the first page has been created once in
 the GitHub web UI: https://github.com/Thunderunruly/session-kanban/wiki
@@ -41,6 +43,12 @@ try {
   Get-ChildItem -Path $source -Filter '*.md' -File |
     Where-Object { $_.Name -ne 'README.md' } |
     ForEach-Object { Copy-Item $_.FullName (Join-Path $temp $_.Name) -Force }
+
+  $english = Join-Path $source 'en'
+  if (Test-Path $english) {
+    Get-ChildItem -Path $english -Filter '*.md' -File |
+      ForEach-Object { Copy-Item $_.FullName (Join-Path $temp $_.Name) -Force }
+  }
 
   Push-Location $temp
   try {

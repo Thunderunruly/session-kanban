@@ -7,6 +7,10 @@
 
 [English](https://github.com/Thunderunruly/session-kanban/blob/main/README.md) | **简体中文**
 
+[中文 Wiki](https://github.com/Thunderunruly/session-kanban/wiki/%E9%A6%96%E9%A1%B5) ·
+[Releases](https://github.com/Thunderunruly/session-kanban/releases) ·
+[Issues](https://github.com/Thunderunruly/session-kanban/issues)
+
 **DeepSeek Harness（DSH）** 的会话看板插件：在 Web UI 左侧栏增加一块看板，集中展示每个会话
 当前在做什么、最近结果、待办进度、运行状态与最近活跃时间，点击卡片即可跳回对应会话。
 

@@ -1,17 +1,28 @@
 **DSH Session Kanban**
 
-- [首页](Home)
-- **使用**
-  - [安装](Installation)
-  - [使用指南](Usage)
-  - [配置](Configuration)
-- **技术**
-  - [架构](Architecture)
-  - [工作日数据源](Data-Sources)
-  - [开发与测试](Development)
-- **其他**
-  - [常见问题](FAQ)
-  - [版本记录](Releases)
+- **English**
+  - [Home](Home)
+  - [Installation](Installation)
+  - [Usage](Usage)
+  - [Configuration](Configuration)
+  - [Architecture](Architecture)
+  - [Data Sources](Data-Sources)
+  - [Development](Development)
+  - [FAQ](FAQ)
+  - [Releases](Releases)
+- **中文**
+  - [首页](首页)
+  - [安装](安装)
+  - [使用指南](使用指南)
+  - [配置](配置)
+  - [架构](架构)
+  - [数据源](数据源)
+  - [开发与测试](开发与测试)
+  - [常见问题](常见问题)
+  - [版本记录](版本记录)
+
+---
+
 - [npm](https://www.npmjs.com/package/dsh-session-kanban)
 - [GitHub](https://github.com/Thunderunruly/session-kanban)
 - [Releases](https://github.com/Thunderunruly/session-kanban/releases)

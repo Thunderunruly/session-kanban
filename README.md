@@ -7,6 +7,10 @@
 
 **English** | [简体中文](https://github.com/Thunderunruly/session-kanban/blob/main/README.zh-CN.md)
 
+[Documentation Wiki](https://github.com/Thunderunruly/session-kanban/wiki) ·
+[Releases](https://github.com/Thunderunruly/session-kanban/releases) ·
+[Issues](https://github.com/Thunderunruly/session-kanban/issues)
+
 A session kanban board plugin for **DeepSeek Harness (DSH)**. It adds a board to the DSH
 Web UI sidebar where every chat session's current work, todo progress, running state and
 recent activity are visible at a glance — click any card to jump straight back into that
