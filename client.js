@@ -1176,10 +1176,10 @@ window.__ModuleLoader__.load({
 .skb-link-btn{border:0;background:none;padding:0;font:inherit;font-size:11px;line-height:16px;color:var(--dsw-alias-brand-primary);cursor:pointer;text-decoration:underline}
 .skb-link-btn:hover{opacity:.8}
 .skb-link-btn[disabled]{opacity:.5;cursor:default}
-.skb-settings-row{display:flex;align-items:center;gap:8px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}
-.skb-settings-text{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0;padding-right:48px}
-.skb-settings-label{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:22px}
-.skb-settings-hint{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}
+.skb-settings-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.skb-settings-text{display:flex;flex:1;flex-direction:column;min-width:0}
+.skb-settings-label{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:20px}
+.skb-settings-hint{color:var(--dsw-alias-label-secondary);margin-top:4px;font-size:12px;line-height:18px}
 .skb-heat-months{position:relative;height:14px;margin-bottom:4px}
 .skb-heat-month{position:absolute;top:0;font-size:10px;line-height:14px;color:var(--dsw-alias-label-secondary)}
 .skb-heat-grid.is-month{grid-template-rows:repeat(7,18px);gap:4px}
@@ -2477,7 +2477,6 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'skb-page', 'data-plugin': PANEL_ID, ref: pageRef }, [
-        h('style', { key: 'style' }, CSS),
         h('div', { key: 'inner', className: 'skb-inner' }, [
           h('header', { key: 'head', className: 'skb-head' }, [
             h('div', { key: 'main', className: 'skb-head-main' }, [
@@ -2680,6 +2679,17 @@ window.__ModuleLoader__.load({
     const inject = ['slots', 'locale', 'sessions', 'remote', 'remote.session', 'remote.workspace', 'uiWorkspace', 'workspaces'];
 
     function apply(ctx) {
+      ctx.effect(() => {
+        if (typeof document === 'undefined') return () => {};
+        const tag = document.createElement('style');
+        tag.dataset.plugin = '@local/session-kanban-board';
+        tag.dataset.pluginCss = '@local/session-kanban-board/panel.css';
+        tag.textContent = CSS;
+        document.head.appendChild(tag);
+        return () => {
+          if (tag.parentNode) tag.parentNode.removeChild(tag);
+        };
+      }, 'session-kanban: styles');
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'session-kanban: dictionaries');
       const t = ctx.locale.bind(NS);
       refreshHolidayCalendar(false).catch(() => {});
