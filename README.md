@@ -30,6 +30,10 @@ Overview page — Chinese and English UI:
   Completed cover every visible session: Completed also holds sessions without a todo
   list (or whose details have not loaded yet), so nothing is left only in All.
 - **Team scope** — filter the board by an Agent Team's member sessions when teams exist.
+- **Workspace filter** — narrow the board to one Workspace's sessions (the host registry's
+  `sessionIds` accounting); defaults to **All workspaces**. Hidden when the host has only
+  one Workspace, persisted like the other board filters, and combined with the team scope
+  and search.
 - **Workday calendar by country** — chooses the working calendar used by the heatmap
   shading; configured in DSH **Settings → General** (`工作日国家/地区`). 24 countries, China
   by default. Countries with statutory make-up/transfer days or substitute holidays use
@@ -155,6 +159,8 @@ DeepSeek Harness（DSH）本地插件：在 Web UI 左侧栏增加「会话看�
 - Tab：概览 / 全部 / 进行中 / 有待办 / 已完成；搜索同时过滤列表与概览统计；有团队时可按团队过滤。
   进行中 / 有待办 / 已完成 覆盖全部会话：没有待办清单（或详情尚未加载）的会话归入「已完成」，
   不会只出现在「全部」里。
+- 工具栏可再按**工作区**过滤（默认「全部工作区」，只有一个工作区时自动隐藏）；与团队范围、搜索叠加生效，
+  选择会记住。
 - **工作日国家/地区**在「设置 → 通用设置」中配置，默认中国。有法定调休/补班或替代休日的国家
   使用各自的专门数据源：中国（holiday-cn，含调休补班）、日本（holiday-jp，含振替休日/国民休日）、
   韩国（holidays-kr，含替代休日）、俄罗斯（isdayoff.ru 生产日历，含调休工作日）；

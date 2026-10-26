@@ -234,6 +234,7 @@ const snapshot = {
       id: 's-nodetails',
       displayTitle: '旧会话',
       running: false,
+      origin: 'subagent',
       updatedAt: now - 3 * 24 * 60 * 60 * 1000,
       cwd: 'F:\\GitLab\\old',
     },
@@ -352,7 +353,6 @@ const expectedZh = [
   '已定位到 StateFlow 滞流',
   '最近任务: 修复 BLE 断连问题',
   '旧会话',
-  '较旧会话只显示基础信息（详情按最近活动优先加载）。',
   '新建会话',
   '刷新',
   '已完成',
@@ -369,6 +369,15 @@ if (!zhMarkup.includes('另有 2 项未显示')) throw new Error('hidden-open wo
 if (zhMarkup.includes('还有 2 项')) throw new Error('old hidden wording still present');
 if (!zhMarkup.includes('aria-label="归档会话"')) throw new Error('archive action missing');
 if (!zhMarkup.includes('aria-label="重命名"')) throw new Error('rename action missing');
+// Subagent-owned sessions cannot be renamed on the host: the action must be
+// disabled with an explanatory label instead of failing after the click.
+if (!zhMarkup.includes('aria-label="子代理会话的标题由路由管理，无法重命名"')) {
+  throw new Error('subagent rename action is not disabled');
+}
+if (!/disabled=""[^>]*aria-label="子代理会话的标题由路由管理，无法重命名"/.test(zhMarkup)
+  && !/aria-label="子代理会话的标题由路由管理，无法重命名"[^>]*disabled=""/.test(zhMarkup)) {
+  throw new Error('subagent rename action is not rendered disabled');
+}
 if (!zhMarkup.includes('aria-label="分叉会话"')) throw new Error('fork action missing');
 if (!zhMarkup.includes('aria-label="复制 Session ID"')) throw new Error('copy action missing');
 if (!zhMarkup.includes('aria-label="取消置顶"')) throw new Error('unpin action missing for the pinned card');
@@ -724,6 +733,38 @@ for (const needle of ['团队 Lead 会话', '队友 A 会话', '队友 B 会话'
 if (!teamScopedMarkup.includes('团队 Lead 会话（3 人团队）')) throw new Error('team scope trigger label missing');
 if (teamScopedMarkup.includes('普通会话')) throw new Error('team scope leaked a non-team session');
 console.log('team scope OK');
+
+// Workspace filter: defaults to every Workspace and narrows to the sessions the
+// host registry accounts to the chosen Workspace; the choice persists.
+globalThis.window.localStorage = makeStorage([
+  ['dsh.session-kanban.filter.v2', 'all'],
+  ['dsh.session-kanban.scope.v1', 'all'],
+]);
+const workspaceSnapshot = {
+  pinnedSessionIds: [],
+  archivedSessionIds: [],
+  items: [
+    { workspaceId: 'ws-alpha', path: 'F:\\GitLab\\alpha', title: 'Alpha 项目', sessionIds: ['s-team-lead', 's-team-a'] },
+    { workspaceId: 'ws-beta', path: 'F:\\GitLab\\beta', title: 'Beta 项目', sessionIds: ['s-plain'] },
+  ],
+};
+const workspaceAllCtx = makeContext(teamSnapshot, 'zh', workspaceSnapshot);
+client.apply(workspaceAllCtx.ctx);
+const workspaceAllMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(workspaceAllCtx.getRegistered()[0].component, { ctx: workspaceAllCtx.ctx }));
+if (!workspaceAllMarkup.includes('工作区')) throw new Error('workspace filter label missing');
+if (!workspaceAllMarkup.includes('全部工作区')) throw new Error('workspace filter does not default to all workspaces');
+for (const needle of ['团队 Lead 会话', '普通会话']) {
+  if (!workspaceAllMarkup.includes(needle)) throw new Error(`all-workspaces view lost: ${needle}`);
+}
+
+globalThis.window.localStorage.store.set('dsh.session-kanban.workspace.v1', 'ws-beta');
+const workspaceBetaCtx = makeContext(teamSnapshot, 'zh', workspaceSnapshot);
+client.apply(workspaceBetaCtx.ctx);
+const workspaceBetaMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(workspaceBetaCtx.getRegistered()[0].component, { ctx: workspaceBetaCtx.ctx }));
+if (!workspaceBetaMarkup.includes('Beta')) throw new Error('workspace filter trigger label missing');
+if (!workspaceBetaMarkup.includes('普通会话')) throw new Error('workspace filter lost its session');
+if (workspaceBetaMarkup.includes('团队 Lead 会话')) throw new Error('workspace filter leaked another workspace');
+console.log('workspace filter OK');
 
 // Registration shape and localized sidebar label.
 const registrations = zh.getRegistered();

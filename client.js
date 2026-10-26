@@ -8,6 +8,10 @@ window.__ModuleLoader__.load({
     const Tooltip = primitives.Tooltip || ((props) => props.children);
     const IconChevronDown = primitives.IconChevronDownOutlineRegular;
     const IconSearch = primitives.IconSearchOutlineRegular;
+    // Header actions use the host's own icon components when the host exposes
+    // them (the running app does); older hosts fall back to the copied geometry.
+    const NativeIconRefresh = primitives.IconRefreshOutlineRegular;
+    const NativeIconNewChat = primitives.IconNewChatOutlineRegular;
     const SegmentedTabs = primitives.SegmentedTabs;
     const SegmentedControl = primitives.SegmentedControl;
     const Input = primitives.Input;
@@ -26,6 +30,7 @@ window.__ModuleLoader__.load({
     const HEAT_STORAGE_KEY = 'dsh.session-kanban.heatmap.v1';
     const HIGHLIGHT_STORAGE_KEY = 'dsh.session-kanban.highlight.v1';
     const SCOPE_STORAGE_KEY = 'dsh.session-kanban.scope.v1';
+    const WORKSPACE_STORAGE_KEY = 'dsh.session-kanban.workspace.v1';
     const HEAT_SCALES = ['year', 'month', 'week', 'day'];
     const HOLIDAY_YEARS = [2023, 2024, 2025, 2026];
     const SETTINGS_STORAGE_KEY = 'dsh.session-kanban.settings.v1';
@@ -495,7 +500,7 @@ window.__ModuleLoader__.load({
     const PAGE_SIZE = 60;
     const MIN_CARD_WIDTH = 320;
     const GRID_GAP = 14;
-    const EMPTY_WORKSPACE_SNAPSHOT = { pinnedSessionIds: [] };
+    const EMPTY_WORKSPACE_SNAPSHOT = { pinnedSessionIds: [], archivedSessionIds: [], items: [] };
 
     // ---------------------------------------------------------------- locale
     const zh = {
@@ -507,6 +512,7 @@ window.__ModuleLoader__.load({
       'action.pin': '置顶会话',
       'action.unpin': '取消置顶',
       'action.rename': '重命名',
+      'action.renameUnavailable': '子代理会话的标题由路由管理，无法重命名',
       'action.fork': '分叉会话',
       'action.copyId': '复制 Session ID',
       'action.archive': '归档会话',
@@ -522,6 +528,8 @@ window.__ModuleLoader__.load({
       'scope.label': '范围',
       'scope.all': '全部会话',
       'scope.teamOption': '{title}（{n} 人团队）',
+      'workspace.label': '工作区',
+      'workspace.all': '全部工作区',
       'overview.sessions': '会话总数',
       'overview.sessionsSub': '全部可见会话',
       'overview.running': '运行中',
@@ -614,7 +622,6 @@ window.__ModuleLoader__.load({
       'state.noMatch': '没有匹配的会话',
       'state.noMatchHint': '换个关键词，或清空搜索查看全部会话。',
       'state.retry': '重试',
-      'state.partial': '较旧会话只显示基础信息（详情按最近活动优先加载）。',
       'archive.failed': '归档失败：{message}',
       'time.justNow': '刚刚',
       'time.minutes': '{n} 分钟前',
@@ -632,6 +639,7 @@ window.__ModuleLoader__.load({
       'action.pin': 'Pin session',
       'action.unpin': 'Unpin session',
       'action.rename': 'Rename',
+      'action.renameUnavailable': 'Subagent sessions are titled by subagent routing and cannot be renamed',
       'action.fork': 'Fork session',
       'action.copyId': 'Copy Session ID',
       'action.archive': 'Archive session',
@@ -647,6 +655,8 @@ window.__ModuleLoader__.load({
       'scope.label': 'Scope',
       'scope.all': 'All sessions',
       'scope.teamOption': '{title} ({n}-member team)',
+      'workspace.label': 'Workspace',
+      'workspace.all': 'All workspaces',
       'overview.sessions': 'Sessions',
       'overview.sessionsSub': 'All visible sessions',
       'overview.running': 'Running',
@@ -739,7 +749,6 @@ window.__ModuleLoader__.load({
       'state.noMatch': 'No matching sessions',
       'state.noMatchHint': 'Try another keyword, or clear the search to see all sessions.',
       'state.retry': 'Retry',
-      'state.partial': 'Older sessions show basic information only; details load for the most recently active sessions first.',
       'archive.failed': 'Could not archive: {message}',
       'time.justNow': 'just now',
       'time.minutes': '{n}m ago',
@@ -844,6 +853,33 @@ window.__ModuleLoader__.load({
       } catch (error) {
         /* storage may be unavailable; the scope still works for this view */
       }
+    }
+
+    /** Detail tab filter: `all` or one host Workspace id; defaults to all. */
+    function readStoredWorkspace() {
+      try {
+        const stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+        return stored && stored.length > 0 ? stored : 'all';
+      } catch (error) {
+        return 'all';
+      }
+    }
+
+    function persistWorkspace(value) {
+      try {
+        window.localStorage.setItem(WORKSPACE_STORAGE_KEY, value);
+      } catch (error) {
+        /* storage may be unavailable; the filter still works for this view */
+      }
+    }
+
+    /** Host Workspace row: prefer its user-visible title, then the directory name. */
+    function workspaceDisplayName(workspace) {
+      if (!workspace) return '';
+      const title = typeof workspace.title === 'string' ? workspace.title.trim() : '';
+      if (title) return title;
+      const path = typeof workspace.path === 'string' ? workspace.path : '';
+      return baseName(path) || path || workspace.workspaceId || '';
     }
 
     function relativeTime(timestamp, t) {
@@ -1058,6 +1094,7 @@ window.__ModuleLoader__.load({
         endKind,
         currentWork,
         hasDetails: work != null,
+        canRename: entry.origin !== 'subagent',
         pinned: pinned === true,
         parentId: typeof entry.parentId === 'string' ? entry.parentId : '',
         team,
@@ -1083,8 +1120,9 @@ window.__ModuleLoader__.load({
       }, children);
     }
 
-    function IconRefresh() {
-      return hostIcon(14, [
+    function IconRefresh(props) {
+      const size = props && props.size ? props.size : 14;
+      return hostIcon(size, [
         h('path', {
           key: 'arc',
           d: 'M14.5001 8C14.5 9.28552 14.1188 10.5422 13.4045 11.611C12.6903 12.6799 11.6752 13.5129 10.4875 14.0049C9.29982 14.4968 7.99295 14.6255 6.73212 14.3747C5.4713 14.124 4.31314 13.505 3.4041 12.596C2.49514 11.687 1.87614 10.5288 1.62537 9.26798C1.37459 8.00716 1.50331 6.70028 1.99525 5.51261C2.48719 4.32494 3.32025 3.30981 4.3891 2.59557C5.45795 1.88134 6.71458 1.50008 8.0001 1.5C9.9001 1.5 11.7001 2.3 13.0001 3.6L14.5001 5.1',
@@ -1094,8 +1132,9 @@ window.__ModuleLoader__.load({
       ]);
     }
 
-    function IconNewChat() {
-      return hostIcon(14, [
+    function IconNewChat(props) {
+      const size = props && props.size ? props.size : 14;
+      return hostIcon(size, [
         h('path', {
           key: 'bubble',
           d: 'M2.37091 11.2501C1.58745 9.89288 1.32067 8.29835 1.61969 6.76006C1.91872 5.22177 2.76342 3.8433 3.99826 2.87846C5.2331 1.91362 6.77494 1.42737 8.33988 1.50925C9.90482 1.59113 11.3875 2.23562 12.5149 3.32406C13.6425 4.41269 14.3387 5.87206 14.4754 7.4334C14.612 8.99474 14.18 10.5529 13.2587 11.8209C12.3375 13.0888 10.9891 13.9813 9.46194 14.3337C8.18691 14.628 6.85895 14.5294 5.64989 14.0605C5.1712 13.8748 4.76962 13.4932 4.26534 13.3967C3.67413 13.2835 2.95257 13.5598 2.03794 14.3337',
@@ -1275,7 +1314,7 @@ window.__ModuleLoader__.load({
 
     // ----------------------------------------------------------------- style
     const CSS = `
-.skb-page{height:100%;min-height:0;display:flex;flex-direction:column;gap:16px;padding:28px 28px 32px;box-sizing:border-box;overflow-y:auto;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
+.skb-page{height:100%;min-height:0;display:flex;flex-direction:column;gap:16px;padding:28px 28px 40px;box-sizing:border-box;overflow-y:auto;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
 .skb-inner{width:100%;max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-height:100%}
 .skb-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;flex:none}
 .skb-head-main{min-width:0}
@@ -1289,6 +1328,7 @@ window.__ModuleLoader__.load({
 .skb-btn-primary:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-brand-primary));opacity:1}
 .skb-btn[disabled]{opacity:.55;cursor:default}
 .skb-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex:none}
+.skb-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
 .skb-scope{display:flex;align-items:center;gap:8px;min-width:0}
 .skb-scope-label{flex:none;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .skb-select,.skb-date-input{height:36px;border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;line-height:22px;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:12px;padding:0 14px;box-sizing:border-box;min-width:0}
@@ -1324,7 +1364,11 @@ window.__ModuleLoader__.load({
 .skb-heat-body{display:flex;align-items:flex-start;gap:6px;min-width:0}
 .skb-heat-days{display:flex;flex-direction:column;gap:3px;flex:none;width:18px}
 .skb-heat-day{height:13px;font-size:10px;line-height:13px;color:var(--dsw-alias-label-secondary);text-align:right}
-.skb-heat-scroll{flex:1;min-width:0;overflow-x:auto;padding-bottom:4px}
+/* The year grid can exceed the panel by a few pixels on narrow widths; keep it
+   scrollable (trackpad / shift+wheel) but hide the scrollbar chrome, which reads
+   as a stray divider when no scrolling is actually needed. */
+.skb-heat-scroll{flex:1;min-width:0;overflow-x:auto;padding-bottom:0;scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior-x:contain}
+.skb-heat-scroll::-webkit-scrollbar{width:0;height:0;display:none}
 .skb-heat-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;width:max-content}
 .skb-heat-cell{width:13px;height:13px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);box-sizing:border-box;flex:none}
 .skb-heat-cell.is-pad{background:transparent}
@@ -1407,7 +1451,7 @@ window.__ModuleLoader__.load({
 .skb-more{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:10px 0}
 .skb-more-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .skb-more-hint{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);opacity:.8}
-.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .15s,box-shadow .15s;content-visibility:auto;contain-intrinsic-size:auto 260px}
+.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .skb-card:hover{border-color:var(--dsw-alias-border-l2);box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .skb-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .skb-card.is-running{border-color:var(--dsw-alias-state-success-primary)}
@@ -1464,7 +1508,6 @@ window.__ModuleLoader__.load({
 .skb-skeleton-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
 .skb-skeleton{height:198px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:linear-gradient(90deg,var(--dsw-alias-bg-layer-1) 0%,var(--dsw-alias-bg-layer-2) 50%,var(--dsw-alias-bg-layer-1) 100%);background-size:200% 100%;animation:skb-shimmer 1.4s linear infinite}
 @keyframes skb-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.skb-note{margin:0;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary)}
 .skb-error-box{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1px solid var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-1);font-size:12.5px;line-height:18px;color:var(--dsw-alias-state-error-primary)}
 .skb-error-box .skb-btn{margin-left:auto}
 .skb-notice-box{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1px solid var(--dsw-alias-state-success-primary);background:var(--dsw-alias-bg-layer-1);font-size:12.5px;line-height:18px;color:var(--dsw-alias-state-success-primary)}
@@ -1481,6 +1524,7 @@ window.__ModuleLoader__.load({
       const [query, setQuery] = useState('');
       const [filter, setFilter] = useState(readStoredFilter);
       const [scope, setScope] = useState(readStoredScope);
+      const [workspaceFilter, setWorkspaceFilter] = useState(readStoredWorkspace);
       const [heatScale, setHeatScale] = useState(readStoredHeatScale);
       const [heatYear, setHeatYear] = useState(() => new Date().getFullYear());
       const [heatMonthStart, setHeatMonthStart] = useState(() => {
@@ -1550,6 +1594,23 @@ window.__ModuleLoader__.load({
         const value = workspaceSnapshot && workspaceSnapshot.archivedSessionIds;
         return new Set(Array.isArray(value) ? value : []);
       }, [workspaceSnapshot]);
+
+      // Peer Workspaces from the host registry. The board shows all of them by
+      // default; the toolbar filter narrows the list to one Workspace's Sessions.
+      const workspaces = useMemo(() => {
+        const items = workspaceSnapshot && Array.isArray(workspaceSnapshot.items)
+          ? workspaceSnapshot.items
+          : [];
+        return items.filter((item) => item && typeof item.workspaceId === 'string' && item.workspaceId.length > 0);
+      }, [workspaceSnapshot]);
+      const workspaceOf = useMemo(() => {
+        const map = new Map();
+        for (const workspace of workspaces) {
+          const ids = Array.isArray(workspace.sessionIds) ? workspace.sessionIds : [];
+          for (const id of ids) map.set(id, workspace.workspaceId);
+        }
+        return map;
+      }, [workspaces]);
 
       const boundT = useMemo(() => {
         void localeTick;
@@ -1651,10 +1712,15 @@ window.__ModuleLoader__.load({
         return { teams, memberOf };
       }, [rows]);
 
+      const workspaceRows = useMemo(() => {
+        if (workspaceFilter === 'all' || workspaces.length === 0) return rows;
+        return rows.filter((row) => workspaceOf.get(row.sessionId) === workspaceFilter);
+      }, [rows, workspaceFilter, workspaces, workspaceOf]);
+
       const scopedRows = useMemo(() => {
-        if (scope === 'all') return rows;
-        return rows.filter((row) => teamInfo.memberOf.get(row.sessionId) === scope);
-      }, [rows, scope, teamInfo]);
+        if (scope === 'all') return workspaceRows;
+        return workspaceRows.filter((row) => teamInfo.memberOf.get(row.sessionId) === scope);
+      }, [workspaceRows, scope, teamInfo]);
 
       // Search applies to every tab, including the overview (which then aggregates only
       // the matching sessions). An empty query keeps the whole scoped catalog.
@@ -1677,6 +1743,15 @@ window.__ModuleLoader__.load({
         setScope('all');
         persistScope('all');
       }, [scope, teamInfo, sessionSnapshot]);
+
+      useEffect(() => {
+        if (workspaceFilter === 'all') return;
+        if (workspaces.some((workspace) => workspace.workspaceId === workspaceFilter)) return;
+        const phase = workspaceSnapshot && workspaceSnapshot.phase;
+        if (workspaces.length === 0 && (phase === 'loading' || phase === 'pending')) return;
+        setWorkspaceFilter('all');
+        persistWorkspace('all');
+      }, [workspaceFilter, workspaces, workspaceSnapshot]);
 
       const runPump = useCallback(async () => {
         const pump = pumpRef.current;
@@ -2527,9 +2602,9 @@ window.__ModuleLoader__.load({
         const confirming = archiveTarget === row.sessionId;
         const timeText = relativeTime(row.updatedAt, boundT);
         /** One hover action: native row-action geometry plus the native Tooltip bubble. */
-        const actionButton = (key, label, icon, onClick, extraClass) => h(Tooltip, {
+        const actionButton = (key, label, icon, onClick, extraClass, disabled, ariaLabel) => h(Tooltip, {
           key,
-          label,
+          label: ariaLabel || label,
           side: 'bottom',
           align: 'end',
           delayMs: 500,
@@ -2538,8 +2613,8 @@ window.__ModuleLoader__.load({
           key: `${key}-button`,
           type: 'button',
           className: `skb-icon-btn${extraClass || ''}`,
-          'aria-label': label,
-          disabled: isBusy,
+          'aria-label': ariaLabel || label,
+          disabled: isBusy || disabled === true,
           onClick,
         }, icon));
         return h('article', {
@@ -2684,10 +2759,21 @@ window.__ModuleLoader__.load({
                   },
                   row.pinned ? ' is-active' : '',
                 ),
-                actionButton('rename', boundT('action.rename'), h(IconRename), (event) => {
-                  event.stopPropagation();
-                  beginRename(row);
-                }),
+                // Subagent sessions are titled by subagent routing on the host;
+                // renaming them is refused, so offer a disabled action instead of
+                // letting the click surface a session/agent-busy error.
+                actionButton(
+                  'rename',
+                  row.canRename ? boundT('action.rename') : boundT('action.renameUnavailable'),
+                  h(IconRename),
+                  (event) => {
+                    event.stopPropagation();
+                    if (!row.canRename) return;
+                    beginRename(row);
+                  },
+                  '',
+                  !row.canRename,
+                ),
                 actionButton('fork', boundT('action.fork'), h(IconFork), (event) => {
                   event.stopPropagation();
                   forkSession(row);
@@ -2708,7 +2794,6 @@ window.__ModuleLoader__.load({
       const phase = sessionSnapshot && sessionSnapshot.phase;
       const loading = scopedRows.length === 0 && phase !== 'ready' && phase !== 'error';
       const failed = scopedRows.length === 0 && phase === 'error';
-      const partial = scopedRows.length > 0 && scopedRows.some((row) => !row.hasDetails);
 
       let body;
       if (loading) {
@@ -2723,17 +2808,24 @@ window.__ModuleLoader__.load({
           h('p', { key: 'hint', className: 'skb-state-hint' }, boundT('state.errorHint')),
         ]);
       } else if (scopedRows.length === 0) {
-        body = h('div', { key: 'empty', className: 'skb-state' }, [
-          h(IconBoard, { key: 'icon' }),
-          h('p', { key: 'title', className: 'skb-state-title' }, boundT('state.empty')),
-          h('p', { key: 'hint', className: 'skb-state-hint' }, boundT('state.emptyHint')),
-          h('button', {
-            key: 'new',
-            type: 'button',
-            className: 'skb-btn skb-btn-primary',
-            onClick: startSession,
-          }, boundT('action.newSession')),
-        ]);
+        // A workspace / team filter can hide every session without the catalog
+        // itself being empty; only show the "no sessions yet" onboarding then.
+        body = rows.length > 0
+          ? h('div', { key: 'nomatch', className: 'skb-state' }, [
+            h('p', { key: 'title', className: 'skb-state-title' }, boundT('state.noMatch')),
+            h('p', { key: 'hint', className: 'skb-state-hint' }, boundT('state.noMatchHint')),
+          ])
+          : h('div', { key: 'empty', className: 'skb-state' }, [
+            h(IconBoard, { key: 'icon' }),
+            h('p', { key: 'title', className: 'skb-state-title' }, boundT('state.empty')),
+            h('p', { key: 'hint', className: 'skb-state-hint' }, boundT('state.emptyHint')),
+            h('button', {
+              key: 'new',
+              type: 'button',
+              className: 'skb-btn skb-btn-primary',
+              onClick: startSession,
+            }, boundT('action.newSession')),
+          ]);
       } else if (filter === 'overview') {
         body = query.trim() && searchedRows.length === 0
           ? h('div', { key: 'nomatch', className: 'skb-state' }, [
@@ -2771,52 +2863,77 @@ window.__ModuleLoader__.load({
                 boundT('panel.subtitle', { total: scopedRows.length, running: runningCount })),
             ]),
             h('div', { key: 'actions', className: 'skb-head-actions' }, [
-              // Native Button + visible label: no `title`, matching the host's own
-              // labelled buttons (raw browser tooltips would break the hover style).
+              // Default `md` Button (36px / 14px / 12px radius) so the header matches
+              // the host's own outline + primary action pair; no raw `title` tooltip.
               h(Button, {
                 key: 'refresh',
                 variant: 'outline',
-                size: 'sm',
-                icon: h(IconRefresh, { key: 'icon' }),
+                icon: NativeIconRefresh ? h(NativeIconRefresh, { key: 'icon', size: 16 }) : h(IconRefresh, { key: 'icon', size: 16 }),
                 disabled: refreshing,
                 onClick: () => refreshAll(),
               }, boundT('action.refresh')),
               h(Button, {
                 key: 'new',
                 variant: 'primary',
-                size: 'sm',
-                icon: h(IconNewChat, { key: 'icon' }),
+                icon: NativeIconNewChat ? h(NativeIconNewChat, { key: 'icon', size: 16 }) : h(IconNewChat, { key: 'icon', size: 16 }),
                 onClick: startSession,
               }, boundT('action.newSession')),
             ]),
           ]),
           h('div', { key: 'toolbar', className: 'skb-toolbar' }, [
-            teamInfo.teams.length > 0
-              ? h('div', { key: 'scope', className: 'skb-scope' }, [
-                h('span', { key: 'label', className: 'skb-scope-label' }, boundT('scope.label')),
-                h(KanbanSelect, {
-                  key: 'select',
-                  className: 'skb-select--scope',
-                  value: scope,
-                  ariaLabel: boundT('scope.label'),
-                  options: [
-                    { id: 'all', label: boundT('scope.all') },
-                    ...teamInfo.teams.map((team) => ({
-                      id: team.id,
-                      label: fill(boundT('scope.teamOption'), {
-                        title: team.title || boundT('meta.untitled'),
-                        n: team.size,
-                      }),
-                    })),
-                  ],
-                  onSelect: (value) => {
-                    setScope(value);
-                    persistScope(value);
-                    setVisibleLimit(PAGE_SIZE);
-                  },
-                }),
-              ])
-              : null,
+            h('div', { key: 'filters', className: 'skb-filters' }, [
+              // Workspace filter is hidden when the host has only one Workspace:
+              // the option would never narrow anything.
+              workspaces.length > 1
+                ? h('div', { key: 'workspace', className: 'skb-scope' }, [
+                  h('span', { key: 'label', className: 'skb-scope-label' }, boundT('workspace.label')),
+                  h(KanbanSelect, {
+                    key: 'select',
+                    className: 'skb-select--scope',
+                    value: workspaceFilter,
+                    ariaLabel: boundT('workspace.label'),
+                    options: [
+                      { id: 'all', label: boundT('workspace.all') },
+                      ...workspaces.map((workspace) => ({
+                        id: workspace.workspaceId,
+                        label: workspaceDisplayName(workspace) || workspace.workspaceId,
+                      })),
+                    ],
+                    onSelect: (value) => {
+                      setWorkspaceFilter(value);
+                      persistWorkspace(value);
+                      setVisibleLimit(PAGE_SIZE);
+                    },
+                  }),
+                ])
+                : null,
+              teamInfo.teams.length > 0
+                ? h('div', { key: 'scope', className: 'skb-scope' }, [
+                  h('span', { key: 'label', className: 'skb-scope-label' }, boundT('scope.label')),
+                  h(KanbanSelect, {
+                    key: 'select',
+                    className: 'skb-select--scope',
+                    value: scope,
+                    ariaLabel: boundT('scope.label'),
+                    options: [
+                      { id: 'all', label: boundT('scope.all') },
+                      ...teamInfo.teams.map((team) => ({
+                        id: team.id,
+                        label: fill(boundT('scope.teamOption'), {
+                          title: team.title || boundT('meta.untitled'),
+                          n: team.size,
+                        }),
+                      })),
+                    ],
+                    onSelect: (value) => {
+                      setScope(value);
+                      persistScope(value);
+                      setVisibleLimit(PAGE_SIZE);
+                    },
+                  }),
+                ])
+                : null,
+            ]),
             h(SegmentedTabs, {
               key: 'tabs',
               label: boundT('tabs.label'),
@@ -2857,9 +2974,6 @@ window.__ModuleLoader__.load({
             ? h('div', { key: 'notice', className: 'skb-notice-box' }, [
               h('span', { key: 'text' }, notice),
             ])
-            : null,
-          partial && filter !== 'overview'
-            ? h('p', { key: 'partial', className: 'skb-note' }, boundT('state.partial'))
             : null,
           body,
         ]),
