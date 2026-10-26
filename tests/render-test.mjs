@@ -235,6 +235,7 @@ const snapshot = {
       displayTitle: '旧会话',
       running: false,
       origin: 'subagent',
+      parentId: 's-idle',
       updatedAt: now - 3 * 24 * 60 * 60 * 1000,
       cwd: 'F:\\GitLab\\old',
     },
@@ -382,6 +383,16 @@ if (!zhMarkup.includes('aria-label="分叉会话"')) throw new Error('fork actio
 if (!zhMarkup.includes('aria-label="复制 Session ID"')) throw new Error('copy action missing');
 if (!zhMarkup.includes('aria-label="取消置顶"')) throw new Error('unpin action missing for the pinned card');
 if (!zhMarkup.includes('aria-label="置顶会话"')) throw new Error('pin action missing for an unpinned card');
+// Parent / child relations: a child card labels and links its parent session, and
+// the parent card counts the child sessions visible in the current view.
+if (!zhMarkup.includes('skb-relation')) throw new Error('session relation row missing');
+if (!zhMarkup.includes('>子代理<')) throw new Error('subagent relation label missing');
+if (!zhMarkup.includes('1 个子会话')) throw new Error('parent child count missing');
+// Family colour: cards carry an inline accent and the relation row shows a dot.
+if (!/style="border-left-color:hsl\(\d+, \d+%, \d+%\)"/.test(zhMarkup)) {
+  throw new Error('session family accent missing');
+}
+if (!zhMarkup.includes('skb-relation-dot')) throw new Error('session family dot missing');
 // Hover actions use the native Tooltip primitive (bottom/end, delayed) instead of `title`.
 for (const tip of ['归档会话', '重命名', '分叉会话', '复制 Session ID', '置顶会话', '取消置顶']) {
   if (!zhMarkup.includes(`data-tip="${tip}"`)) throw new Error(`native action tooltip missing: ${tip}`);
@@ -732,6 +743,9 @@ for (const needle of ['团队 Lead 会话', '队友 A 会话', '队友 B 会话'
 }
 if (!teamScopedMarkup.includes('团队 Lead 会话（3 人团队）')) throw new Error('team scope trigger label missing');
 if (teamScopedMarkup.includes('普通会话')) throw new Error('team scope leaked a non-team session');
+if (!teamScopedMarkup.includes('团队成员')) throw new Error('team member relation label missing');
+if (!teamScopedMarkup.includes('2 个子会话')) throw new Error('team lead child count missing');
+if (!teamScopedMarkup.includes('is-parent')) throw new Error('team lead parent marker missing');
 console.log('team scope OK');
 
 // Workspace filter: defaults to every Workspace and narrows to the sessions the

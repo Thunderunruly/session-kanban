@@ -605,6 +605,11 @@ window.__ModuleLoader__.load({
       'todo.moreDone': '另有 {n} 项已完成',
       'todo.moreHidden': '另有 {n} 项未显示',
       'meta.untitled': '未命名会话',
+      'relation.subagent': '子代理',
+      'relation.teamMember': '团队成员',
+      'relation.fork': '分叉自',
+      'relation.parentMissing': '父会话不可见',
+      'relation.children': '{n} 个子会话',
       'meta.pinned': '已置顶',
       'rename.label': '会话标题',
       'rename.empty': '标题不能为空',
@@ -732,6 +737,11 @@ window.__ModuleLoader__.load({
       'todo.moreDone': '{n} more done',
       'todo.moreHidden': '{n} more hidden',
       'meta.untitled': 'Untitled session',
+      'relation.subagent': 'Subagent',
+      'relation.teamMember': 'Team member',
+      'relation.fork': 'Forked from',
+      'relation.parentMissing': 'Parent session not visible',
+      'relation.children': '{n} child sessions',
       'meta.pinned': 'Pinned',
       'rename.label': 'Session title',
       'rename.empty': 'Title cannot be empty',
@@ -771,6 +781,34 @@ window.__ModuleLoader__.load({
       const text = String(path).replace(/[\\/]+$/, '');
       const cut = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'));
       return cut >= 0 ? text.slice(cut + 1) : text;
+    }
+
+    /**
+     * Stable accent colour for one Session family: a parent and all of its child
+     * sessions (subagent / team member / fork) share the same hue, so cards that
+     * belong together are recognisable at a glance in the masonry board.
+     */
+    const RELATION_ACCENTS = [
+      'hsl(210, 58%, 66%)',
+      'hsl(150, 50%, 62%)',
+      'hsl(35, 68%, 64%)',
+      'hsl(330, 52%, 70%)',
+      'hsl(265, 48%, 72%)',
+      'hsl(190, 52%, 64%)',
+      'hsl(95, 44%, 60%)',
+      'hsl(0, 58%, 68%)',
+      'hsl(300, 40%, 72%)',
+      'hsl(55, 52%, 60%)',
+    ];
+    function relationshipAccent(seed) {
+      const text = typeof seed === 'string' ? seed : '';
+      if (!text) return '';
+      let hash = 2166136261;
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return RELATION_ACCENTS[(hash >>> 0) % RELATION_ACCENTS.length];
     }
 
     function remoteErrorText(result) {
@@ -1451,7 +1489,7 @@ window.__ModuleLoader__.load({
 .skb-more{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:10px 0}
 .skb-more-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .skb-more-hint{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);opacity:.8}
-.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .15s,box-shadow .15s;box-sizing:border-box}
 .skb-card:hover{border-color:var(--dsw-alias-border-l2);box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .skb-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .skb-card.is-running{border-color:var(--dsw-alias-state-success-primary)}
@@ -1467,6 +1505,21 @@ window.__ModuleLoader__.load({
 .skb-card-title{margin:0;font-size:15px;line-height:22px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .skb-title-input{box-sizing:border-box;width:100%;height:28px;padding:0 8px;border-radius:var(--dsw-radius-sm,6px);border:1px solid var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:15px;font-weight:600;line-height:22px;outline:none}
 .skb-turn{font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+/* A parent and its children share one accent hue (inline border-left-color on
+   the card and dots in the relation row), so family membership is visible even
+   when the cards are scattered across the masonry columns. */
+.skb-card.is-child,.skb-card.is-parent{border-left-width:3px}
+.skb-relation{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary)}
+.skb-relation-parent{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%}
+.skb-relation-arrow{flex:none;opacity:.75}
+.skb-relation-dot{flex:none;width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.skb-relation-kind{flex:none;padding:0 6px;border-radius:999px;background:var(--dsw-alias-bg-module-platform);font-size:10.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.skb-relation-link{appearance:none;border:0;background:none;padding:0;margin:0;font:inherit;font-weight:500;color:var(--dsw-alias-label-primary);cursor:pointer;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.skb-relation-link:hover{text-decoration:underline}
+.skb-relation-link:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px;border-radius:4px}
+.skb-relation-missing{opacity:.85}
+.skb-relation-children{display:flex;align-items:center;gap:5px;flex:none}
+.skb-relation-sep{margin:0 2px;opacity:.6}
 .skb-label{font-size:11px;line-height:16px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
 .skb-work{display:flex;flex-direction:column;gap:4px;min-width:0}
 .skb-work-text{margin:0;font-size:13px;line-height:19px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
@@ -1721,6 +1774,50 @@ window.__ModuleLoader__.load({
         if (scope === 'all') return workspaceRows;
         return workspaceRows.filter((row) => teamInfo.memberOf.get(row.sessionId) === scope);
       }, [workspaceRows, scope, teamInfo]);
+
+      // Parent / child relations inside the current view. Subagent-owned sessions,
+      // Agent Team members and forks all carry a parentSession; the card labels which
+      // one it is and links to the parent, while parents show their visible child count.
+      const relations = useMemo(() => {
+        const byId = new Map(rows.map((row) => [row.sessionId, row]));
+        const childCount = new Map();
+        for (const row of scopedRows) {
+          if (!row.parentId) continue;
+          childCount.set(row.parentId, (childCount.get(row.parentId) || 0) + 1);
+        }
+        const map = new Map();
+        for (const row of scopedRows) {
+          const parentId = row.parentId || '';
+          const children = childCount.get(row.sessionId) || 0;
+          // A parent and its children share one hue: the child border/dot uses the
+          // parent's accent, the parent card uses its own accent for its child count.
+          const childAccent = children > 0 ? relationshipAccent(row.sessionId) : '';
+          if (!parentId) {
+            map.set(row.sessionId, {
+              parentId: '',
+              kindKey: '',
+              parentTitle: '',
+              childCount: children,
+              accent: childAccent,
+              childAccent,
+            });
+            continue;
+          }
+          const parent = byId.get(parentId);
+          let kindKey = 'relation.fork';
+          if (teamInfo.memberOf.get(row.sessionId) === parentId) kindKey = 'relation.teamMember';
+          else if (row.origin === 'subagent') kindKey = 'relation.subagent';
+          map.set(row.sessionId, {
+            parentId,
+            kindKey,
+            parentTitle: parent ? (parent.title || boundT('meta.untitled')) : '',
+            childCount: children,
+            accent: relationshipAccent(parentId),
+            childAccent,
+          });
+        }
+        return map;
+      }, [rows, scopedRows, teamInfo, boundT]);
 
       // Search applies to every tab, including the overview (which then aggregates only
       // the matching sessions). An empty query keeps the whole scoped catalog.
@@ -2414,9 +2511,37 @@ window.__ModuleLoader__.load({
       const archiveSession = useCallback(async (sessionId) => {
         setBusyId(sessionId);
         setErrorText(null);
+        // The host clears the main view when the Session retained by it is archived
+        // (`UiWorkspaceService.archiveSession` + its archived-current watcher), which
+        // would replace the board with the "new session" home. Remember whether this
+        // archive hits that Session so the board can be reopened afterwards.
+        let reopenBoard = false;
+        try {
+          const snapshot = sessions.list.getSnapshot() || {};
+          const entry = snapshot.byId && snapshot.byId[sessionId];
+          const retained = entry && entry.retainedBy;
+          reopenBoard = !!retained && typeof retained === 'object' && (retained.mainView ?? 0) > 0;
+        } catch (error) {
+          reopenBoard = false;
+        }
         try {
           await ctx.workspaces.archiveSession(sessionId);
           setArchiveTarget(null);
+          if (reopenBoard) {
+            const layout = typeof ctx.get === 'function' ? ctx.get('layout') : null;
+            if (layout && typeof layout.selectPanel === 'function') {
+              // The host clears the main view asynchronously; reopen the board once
+              // that unmount has happened so an archive from the board keeps it open.
+              setTimeout(() => {
+                if (mountedRef.current) return;
+                try {
+                  layout.selectPanel(PANEL_ID);
+                } catch (error) {
+                  /* the layout may be gone if the window closed */
+                }
+              }, 150);
+            }
+          }
         } catch (error) {
           setArchiveTarget(null);
           const message = error && error.message ? String(error.message) : String(error);
@@ -2424,7 +2549,7 @@ window.__ModuleLoader__.load({
         } finally {
           setBusyId(null);
         }
-      }, [ctx, boundT]);
+      }, [ctx, sessions, boundT]);
 
       const beginRename = useCallback((row) => {
         editingRef.current = row.sessionId;
@@ -2600,6 +2725,7 @@ window.__ModuleLoader__.load({
           && hiddenItems.every((todo) => todo && todo.status === 'completed');
         const isBusy = busyId === row.sessionId;
         const confirming = archiveTarget === row.sessionId;
+        const relation = relations.get(row.sessionId);
         const timeText = relativeTime(row.updatedAt, boundT);
         /** One hover action: native row-action geometry plus the native Tooltip bubble. */
         const actionButton = (key, label, icon, onClick, extraClass, disabled, ariaLabel) => h(Tooltip, {
@@ -2619,7 +2745,8 @@ window.__ModuleLoader__.load({
         }, icon));
         return h('article', {
           key: row.sessionId,
-          className: `skb-card${row.running ? ' is-running' : ''}`,
+          className: `skb-card${row.running ? ' is-running' : ''}${relation && relation.parentId ? ' is-child' : ''}${relation && relation.childCount > 0 ? ' is-parent' : ''}`,
+          style: relation && relation.accent ? { borderLeftColor: relation.accent } : undefined,
           role: 'button',
           tabIndex: 0,
           'aria-label': row.title || boundT('meta.untitled'),
@@ -2675,6 +2802,48 @@ window.__ModuleLoader__.load({
             }, row.title || boundT('meta.untitled')),
           row.running && row.statsText
             ? h('div', { key: 'turn', className: 'skb-turn' }, row.statsText)
+            : null,
+          relation && (relation.parentId || relation.childCount > 0)
+            ? h('div', { key: 'relation', className: 'skb-relation' }, [
+              h('span', { key: 'arrow', className: 'skb-relation-arrow', 'aria-hidden': true }, '↳'),
+              relation.parentId
+                ? h('span', { key: 'parent', className: 'skb-relation-parent' }, [
+                  h('span', {
+                    key: 'dot',
+                    className: 'skb-relation-dot',
+                    style: { background: relation.accent },
+                    'aria-hidden': true,
+                  }),
+                  h('span', { key: 'kind', className: 'skb-relation-kind' }, boundT(relation.kindKey)),
+                  relation.parentTitle
+                    ? h('button', {
+                      key: 'link',
+                      type: 'button',
+                      className: 'skb-relation-link',
+                      title: relation.parentTitle,
+                      onClick: (event) => {
+                        event.stopPropagation();
+                        openSession(relation.parentId);
+                      },
+                    }, relation.parentTitle)
+                    : h('span', { key: 'missing', className: 'skb-relation-missing' }, boundT('relation.parentMissing')),
+                ])
+                : null,
+              relation.childCount > 0
+                ? h('span', { key: 'children', className: 'skb-relation-children' }, [
+                  relation.parentId
+                    ? h('span', { key: 'sep', className: 'skb-relation-sep', 'aria-hidden': true }, '·')
+                    : null,
+                  h('span', {
+                    key: 'dot',
+                    className: 'skb-relation-dot',
+                    style: { background: relation.childAccent || relation.accent },
+                    'aria-hidden': true,
+                  }),
+                  h('span', { key: 'text' }, boundT('relation.children', { n: relation.childCount })),
+                ])
+                : null,
+            ])
             : null,
           h('section', { key: 'work', className: 'skb-work' }, [
             h('div', { key: 'label', className: 'skb-label' },

@@ -24,11 +24,17 @@ Overview page — Chinese and English UI:
 - **Session cards** — current request & latest reply, todo progress bar, updated time,
   working directory, running state; click to open the session.
 - **Quick actions** — pin / unpin, inline rename, fork, copy Session ID, archive (with
-  confirmation), refresh, new session.
+  confirmation), refresh, new session. Archiving the Session currently held by the main
+  view reopens the board afterwards instead of dropping the user on the new-session home.
 - **Tabs & search** — Overview / All / Running / With-todos / Completed, plus a search box
   that filters both the board and the overview aggregates. Running, With-todos and
   Completed cover every visible session: Completed also holds sessions without a todo
   list (or whose details have not loaded yet), so nothing is left only in All.
+- **Session relationships** — child sessions (subagent, team member or fork) show a
+  compact row naming the relation and linking to their parent session; parent cards show
+  how many child sessions are visible in the current view. One family shares one accent
+  colour: the parent and all of its children carry the same tinted left edge and relation
+  dots, so scattered cards can be matched to their parent regardless of board order.
 - **Team scope** — filter the board by an Agent Team's member sessions when teams exist.
 - **Workspace filter** — narrow the board to one Workspace's sessions (the host registry's
   `sessionIds` accounting); defaults to **All workspaces**. Hidden when the host has only
@@ -155,7 +161,11 @@ DeepSeek Harness（DSH）本地插件：在 Web UI 左侧栏增加「会话看�
 当前工作、待办清单与完成进度，点击卡片即可跳回对应会话。
 
 - 概览首页：会话总数、进行中数量、待办完成率、GitHub 风格活跃热力图（年/月/周/日）。
-- 卡片支持置顶、重命名、分叉、复制 Session ID、归档、刷新、新建会话。
+- 卡片支持置顶、重命名、分叉、复制 Session ID、归档、刷新、新建会话；若归档的是主视图当前持有的会话，
+  归档后会自动重新打开看板，而不是跳回「新对话」首页。
+- 会话关系：子代理 / 团队成员 / 分叉产生的子会话卡片会显示关系标签和父会话链接（点击直接打开父会话），
+  父会话卡片显示当前视图内可见的子会话数量。同一个父会话及其子会话共享一种强调色：左侧色边和关系行里的
+  圆点同色，卡片在瀑布流里被打散也能对上是哪一家的子会话。
 - Tab：概览 / 全部 / 进行中 / 有待办 / 已完成；搜索同时过滤列表与概览统计；有团队时可按团队过滤。
   进行中 / 有待办 / 已完成 覆盖全部会话：没有待办清单（或详情尚未加载）的会话归入「已完成」，
   不会只出现在「全部」里。
