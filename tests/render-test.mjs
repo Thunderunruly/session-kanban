@@ -18,7 +18,7 @@ globalThis.window = {
   },
 };
 vm.runInThisContext(SOURCE);
-if (!moduleRecord || moduleRecord.id !== '@local/session-kanban-board') throw new Error('loader id mismatch');
+if (!moduleRecord || moduleRecord.id !== 'dsh-session-kanban') throw new Error('loader id mismatch');
 
 // Shell UI primitives are provided by the module system; render a minimal stand-in.
 const primitivesStub = {

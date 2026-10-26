@@ -1,9 +1,29 @@
 {
-  "name": "@local/session-kanban-board",
+  "name": "dsh-session-kanban",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
-  "description": "Session kanban board: every chat session's current work, todos, and progress in the left sidebar, one click to jump.",
+  "description": "Session kanban board for DeepSeek Harness: every chat session's current work, todos, and progress in the left sidebar, with a searchable overview heatmap and one click to jump back.",
+  "license": "MIT",
+  "author": "Thunderunruly",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thunderunruly/session-kanban.git"
+  },
+  "homepage": "https://github.com/Thunderunruly/session-kanban#readme",
+  "bugs": {
+    "url": "https://github.com/Thunderunruly/session-kanban/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "session",
+    "kanban",
+    "board",
+    "ui"
+  ],
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -15,7 +35,9 @@
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "README.md",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {

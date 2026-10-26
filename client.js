@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@local/session-kanban-board',
+  id: 'dsh-session-kanban',
   factory(require) {
     const React = require('react');
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives');
@@ -2688,8 +2688,8 @@ window.__ModuleLoader__.load({
       ctx.effect(() => {
         if (typeof document === 'undefined') return () => {};
         const tag = document.createElement('style');
-        tag.dataset.plugin = '@local/session-kanban-board';
-        tag.dataset.pluginCss = '@local/session-kanban-board/panel.css';
+        tag.dataset.plugin = 'dsh-session-kanban';
+        tag.dataset.pluginCss = 'dsh-session-kanban/panel.css';
         tag.textContent = CSS;
         document.head.appendChild(tag);
         return () => {

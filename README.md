@@ -1,5 +1,7 @@
 # DSH Session Kanban
 
+[![npm](https://img.shields.io/npm/v/dsh-session-kanban)](https://www.npmjs.com/package/dsh-session-kanban)
+
 A local plugin for **DeepSeek Harness (DSH)** that adds a session kanban board to the
 Harness Web UI sidebar: every chat session's current work, todo list, and progress at a
 glance, one click to jump back into the session.
@@ -46,7 +48,13 @@ Two halves in one bundle:
 
 ## Install
 
-The plugin is a local DSH bundle. In a DSH session, use the plugin manager:
+From npm:
+
+```sh
+dsh plugin --profile web add dsh-session-kanban
+```
+
+From a local checkout, use the DSH plugin manager:
 
 ```
 install_bundle <absolute path to this folder>
@@ -56,7 +64,7 @@ or add it to the profile as a linked dependency and let `cordis.patch.yml` inser
 
 ```json
 "dependencies": {
-  "@local/session-kanban-board": "link:F:/path/to/session-kanban"
+  "dsh-session-kanban": "link:F:/path/to/session-kanban"
 }
 ```
 
@@ -99,7 +107,7 @@ tests/              # offline fold / SSR tests
 
 ## Notes
 
-- Package name is `@local/session-kanban-board`; sidebar/panel slot id is `session-kanban`.
+- Package name is `dsh-session-kanban` (npm); sidebar/panel slot id is `session-kanban`.
 - Client preferences are stored under `dsh.session-kanban.*` keys in `localStorage`.
 - Built as a local/experimental plugin, not an official DeepSeek product.
 
@@ -116,7 +124,8 @@ DeepSeek Harness（DSH）本地插件：在 Web UI 左侧栏增加「会话看�
   热力图左下显示数据状态与「更新」按钮；内置 2023–2026 中国数据用于离线兜底。
 - 下拉框复用宿主 `Menu` 组件、设置行复用宿主 General 行样式，主题切换自动跟随。
 
-安装：在 DSH 中用插件管理器 `install_bundle <本目录绝对路径>`（或作为 `link:` 依赖加入 profile），
+安装：`dsh plugin --profile web add dsh-session-kanban`（npm 发布后）；本地开发则在 DSH 中用插件管理器
+`install_bundle <本目录绝对路径>`（或作为 `link:` 依赖加入 profile），
 之后重载一次 DSH 窗口即可；此后客户端改动支持热加载。
 
 离线测试：

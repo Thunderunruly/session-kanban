@@ -1,4 +1,4 @@
 - insert:
     - id: session-kanban
-      name: '@local/session-kanban-board'
+      name: 'dsh-session-kanban'
       config: {}
