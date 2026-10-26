@@ -8,6 +8,14 @@ glance, one click to jump back into the session.
 
 > 中文说明见下方 [中文文档](#中文文档)。
 
+## Screenshots
+
+Overview page — Chinese and English UI:
+
+![Session board overview — 中文](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-zh.png)
+
+![Session board overview — English](https://raw.githubusercontent.com/Thunderunruly/session-kanban/main/docs/screenshots/overview-en.png)
+
 ## Features
 
 - **Sidebar entry** — a panel icon next to the built-in panels; opens a kanban board.
@@ -44,9 +52,9 @@ glance, one click to jump back into the session.
   opening below or above instead of being clamped over the trigger); card hover actions
   reuse the native Session-row action geometry and `Tooltip` bubble, and settings rows
   match the built-in General rows, so light/dark theme changes apply automatically.
-- **Scalable rendering** — masonry columns with `content-visibility` virtualization,
-  automatic pagination when scrolling near the bottom, and an incremental detail pump for
-  cold sessions.
+- **Scalable rendering** — masonry columns, automatic pagination when scrolling near the
+  bottom, and an incremental detail pump for cold sessions. Cards are laid out at their
+  natural height (no intrinsic-size placeholder), so the last rows are never clipped.
 
 ## How it works
 
