@@ -5,6 +5,12 @@ window.__ModuleLoader__.load({
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives');
     const Menu = primitives.Menu;
     const IconChevronDown = primitives.IconChevronDownOutlineRegular;
+    const IconSearch = primitives.IconSearchOutlineRegular;
+    const SegmentedTabs = primitives.SegmentedTabs;
+    const SegmentedControl = primitives.SegmentedControl;
+    const Input = primitives.Input;
+    const Button = primitives.Button;
+    const Checkbox = primitives.Checkbox;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
     const h = React.createElement;
 
@@ -347,6 +353,8 @@ window.__ModuleLoader__.load({
       'list.loaded': '已显示 {shown}/{total} 个会话',
       'list.autoLoadHint': '滚动到底部自动加载更多',
       'tab.overview': '概览',
+      'tabs.label': '会话筛选',
+      'heat.scaleLabel': '热力图刻度',
       'scope.label': '范围',
       'scope.all': '全部会话',
       'scope.teamOption': '{title}（{n} 人团队）',
@@ -460,6 +468,8 @@ window.__ModuleLoader__.load({
       'list.loaded': 'Showing {shown}/{total} sessions',
       'list.autoLoadHint': 'Scroll to the bottom to load more',
       'tab.overview': 'Overview',
+      'tabs.label': 'Session filters',
+      'heat.scaleLabel': 'Heatmap scale',
       'scope.label': 'Scope',
       'scope.all': 'All sessions',
       'scope.teamOption': '{title} ({n}-member team)',
@@ -1105,14 +1115,7 @@ window.__ModuleLoader__.load({
    viewport scroll, this only caps the surface height. */
 .skb-menu-list{max-height:min(400px,calc(100vh - 120px))}
 .skb-date-input{width:100%;cursor:default;color-scheme:inherit}
-.skb-tabs{display:flex;gap:2px;padding:3px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);max-width:100%;overflow-x:auto}
-.skb-tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;line-height:1;cursor:pointer;white-space:nowrap;flex:none}
-.skb-tab:hover{color:var(--dsw-alias-label-primary)}
-.skb-tab.is-active{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.skb-tab svg{flex:none}
-.skb-search{height:32px;width:236px;max-width:100%;padding:0 12px;box-sizing:border-box;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none}
-.skb-search::placeholder{color:var(--dsw-alias-label-secondary)}
-.skb-search:focus{border-color:var(--dsw-alias-brand-primary)}
+.skb-search-field{width:236px;max-width:100%}
 .skb-overview{display:flex;flex-direction:column;gap:14px;min-width:0}
 .skb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .skb-stat{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
@@ -1124,10 +1127,7 @@ window.__ModuleLoader__.load({
 .skb-panel-title{display:flex;flex-direction:column;gap:2px;min-width:0}
 .skb-panel-title strong{font-size:14px;line-height:20px;font-weight:600}
 .skb-panel-title span{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary)}
-.skb-scale{display:flex;gap:2px;padding:3px;border-radius:9px;background:var(--dsw-alias-bg-layer-2)}
-.skb-scale-btn{height:26px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;cursor:pointer;white-space:nowrap}
-.skb-scale-btn:hover{color:var(--dsw-alias-label-primary)}
-.skb-scale-btn.is-active{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-weight:500}
+.skb-scale{width:100%}
 .skb-heat-body{display:flex;align-items:flex-start;gap:6px;min-width:0}
 .skb-heat-days{display:flex;flex-direction:column;gap:3px;flex:none;width:18px}
 .skb-heat-day{height:13px;font-size:10px;line-height:13px;color:var(--dsw-alias-label-secondary);text-align:right}
@@ -1173,8 +1173,6 @@ window.__ModuleLoader__.load({
 .skb-heat-main{display:flex;flex-direction:column;gap:10px;flex:1 1 320px;min-width:0}
 .skb-heat-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .skb-heat-field-label{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.skb-check{display:flex;align-items:center;gap:8px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-primary);cursor:pointer;user-select:none}
-.skb-check input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
 .skb-heat-note{margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary)}
 .skb-heat-calendar{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
 .skb-link-btn{border:0;background:none;padding:0;font:inherit;font-size:11px;line-height:16px;color:var(--dsw-alias-brand-primary);cursor:pointer;text-decoration:underline}
@@ -1202,8 +1200,7 @@ window.__ModuleLoader__.load({
 .skb-heat-cell.is-offday.lvl-2{opacity:.52}
 .skb-heat-cell.is-offday.lvl-3{opacity:.76}
 .skb-heat-cell.is-offday.lvl-4{opacity:1}
-.skb-heat-side .skb-scale{flex-wrap:wrap;width:100%}
-.skb-heat-side .skb-scale-btn{flex:1 1 0;text-align:center;justify-content:center;display:inline-flex;align-items:center}
+.skb-heat-side .skb-scale{width:100%}
 .skb-grid{display:flex;align-items:flex-start;gap:14px;min-width:0}
 .skb-col{display:flex;flex-direction:column;gap:14px;flex:1 1 0;min-width:0}
 .skb-grid-wrap{display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -1578,12 +1575,16 @@ window.__ModuleLoader__.load({
       ), [searchedRows, filter]);
 
       const tabs = [
-        { id: 'overview', label: boundT('tab.overview'), icon: IconOverview },
-        { id: 'all', label: boundT('filter.all'), icon: IconAll },
-        { id: 'running', label: boundT('filter.running'), icon: IconRunning },
-        { id: 'todos', label: boundT('filter.todos'), icon: IconTodos },
-        { id: 'done', label: boundT('filter.done'), icon: IconDone },
-      ];
+        { value: 'overview', label: boundT('tab.overview') },
+        { value: 'all', label: boundT('filter.all') },
+        { value: 'running', label: boundT('filter.running') },
+        { value: 'todos', label: boundT('filter.todos') },
+        { value: 'done', label: boundT('filter.done') },
+      ].map((tab) => ({
+        ...tab,
+        id: `session-kanban-tab-${tab.value}`,
+        panelId: `session-kanban-panel-${tab.value}`,
+      }));
 
       const heatPeriod = useMemo(() => {
         if (heatScale === 'year') {
@@ -1884,47 +1885,44 @@ window.__ModuleLoader__.load({
             ]),
             h('div', { key: 'layout', className: 'skb-heat-layout' }, [
               h('aside', { key: 'side', className: 'skb-heat-side' }, [
-                h('div', { key: 'scale', className: 'skb-scale', role: 'tablist' }, scaleTabs.map((scale) => h('button', {
-                  key: scale.id,
-                  type: 'button',
-                  role: 'tab',
-                  'aria-selected': heatScale === scale.id,
-                  className: `skb-scale-btn${heatScale === scale.id ? ' is-active' : ''}`,
-                  onClick: () => {
-                    setHeatScale(scale.id);
-                    persistHeatScale(scale.id);
+                h(SegmentedControl, {
+                  key: 'scale',
+                  id: 'session-kanban-heat-scale',
+                  className: 'skb-scale',
+                  label: boundT('heat.scaleLabel'),
+                  value: heatScale,
+                  options: scaleTabs.map((scale) => ({ value: scale.id, label: scale.label })),
+                  onChange: (next) => {
+                    setHeatScale(next);
+                    persistHeatScale(next);
                   },
-                }, scale.label))),
+                }),
                 h('div', { key: 'period', className: 'skb-heat-field' }, [
                   h('span', { key: 'label', className: 'skb-heat-field-label' }, periodLabel),
                   periodControl,
                 ]),
-                h('label', { key: 'workday', className: 'skb-check' }, [
-                  h('input', {
-                    key: 'box',
-                    type: 'checkbox',
-                    checked: highlight.workday,
-                    onChange: (event) => {
-                      const next = { ...highlight, workday: event.target.checked };
-                      setHighlight(next);
-                      persistHighlight(next);
-                    },
-                  }),
-                  h('span', { key: 'text' }, boundT('heat.highlightWorkday')),
-                ]),
-                h('label', { key: 'offday', className: 'skb-check' }, [
-                  h('input', {
-                    key: 'box',
-                    type: 'checkbox',
-                    checked: highlight.offday,
-                    onChange: (event) => {
-                      const next = { ...highlight, offday: event.target.checked };
-                      setHighlight(next);
-                      persistHighlight(next);
-                    },
-                  }),
-                  h('span', { key: 'text' }, boundT('heat.highlightOffday')),
-                ]),
+                h(Checkbox, {
+                  key: 'workday',
+                  className: 'skb-check',
+                  label: boundT('heat.highlightWorkday'),
+                  checked: highlight.workday,
+                  onChange: (checked) => {
+                    const next = { ...highlight, workday: checked };
+                    setHighlight(next);
+                    persistHighlight(next);
+                  },
+                }),
+                h(Checkbox, {
+                  key: 'offday',
+                  className: 'skb-check',
+                  label: boundT('heat.highlightOffday'),
+                  checked: highlight.offday,
+                  onChange: (checked) => {
+                    const next = { ...highlight, offday: checked };
+                    setHighlight(next);
+                    persistHighlight(next);
+                  },
+                }),
                 h('p', { key: 'note', className: 'skb-heat-note' }, boundT('heat.holidayNote')),
                 h('div', { key: 'calendar', className: 'skb-heat-calendar' }, [
                   h('span', { key: 'text', className: 'skb-heat-note' }, calendarStatus),
@@ -2489,21 +2487,23 @@ window.__ModuleLoader__.load({
                 boundT('panel.subtitle', { total: scopedRows.length, running: runningCount })),
             ]),
             h('div', { key: 'actions', className: 'skb-head-actions' }, [
-              h('button', {
+              h(Button, {
                 key: 'refresh',
-                type: 'button',
-                className: 'skb-btn skb-btn-ghost',
+                variant: 'outline',
+                size: 'sm',
+                icon: h(IconRefresh, { key: 'icon' }),
                 disabled: refreshing,
                 title: boundT('action.refresh'),
                 onClick: () => refreshAll(),
-              }, [h(IconRefresh, { key: 'icon' }), boundT('action.refresh')]),
-              h('button', {
+              }, boundT('action.refresh')),
+              h(Button, {
                 key: 'new',
-                type: 'button',
-                className: 'skb-btn skb-btn-primary',
+                variant: 'primary',
+                size: 'sm',
+                icon: h(IconNewChat, { key: 'icon' }),
                 title: boundT('action.newSession'),
                 onClick: startSession,
-              }, [h(IconNewChat, { key: 'icon' }), boundT('action.newSession')]),
+              }, boundT('action.newSession')),
             ]),
           ]),
           h('div', { key: 'toolbar', className: 'skb-toolbar' }, [
@@ -2533,21 +2533,22 @@ window.__ModuleLoader__.load({
                 }),
               ])
               : null,
-            h('div', { key: 'tabs', className: 'skb-tabs', role: 'tablist' }, tabs.map((tab) => h('button', {
-              key: tab.id,
-              type: 'button',
-              role: 'tab',
-              'aria-selected': filter === tab.id,
-              className: `skb-tab${filter === tab.id ? ' is-active' : ''}`,
-              onClick: () => {
-                setFilter(tab.id);
-                persistFilter(tab.id);
+            h(SegmentedTabs, {
+              key: 'tabs',
+              label: boundT('tabs.label'),
+              value: filter,
+              items: tabs,
+              onChange: (next) => {
+                setFilter(next);
+                persistFilter(next);
                 setVisibleLimit(PAGE_SIZE);
               },
-            }, [h(tab.icon, { key: 'icon' }), tab.label]))),
-            h('input', {
+            }),
+            h(Input, {
               key: 'search',
-              className: 'skb-search',
+              className: 'skb-search-field',
+              type: 'search',
+              icon: h(IconSearch, { key: 'icon' }),
               value: query,
               placeholder: boundT('search.placeholder'),
               'aria-label': boundT('search.placeholder'),

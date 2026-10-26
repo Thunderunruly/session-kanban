@@ -35,8 +35,65 @@ const primitivesStub = {
         : null,
     );
   },
+  SegmentedTabs({ items, value, label }) {
+    return React.createElement(
+      'div',
+      { role: 'tablist', className: 'mock-segmented-tabs', 'aria-label': label },
+      (items || []).map((item) => React.createElement('button', {
+        key: item.value,
+        type: 'button',
+        role: 'tab',
+        'aria-selected': item.value === value,
+      }, item.label)),
+    );
+  },
+  SegmentedControl({ options, value, label, id }) {
+    return React.createElement(
+      'div',
+      { role: 'tablist', className: 'mock-segmented-control', 'aria-label': label, id },
+      (options || []).map((option) => React.createElement('button', {
+        key: option.value,
+        type: 'button',
+        role: 'tab',
+        'aria-selected': option.value === value,
+      }, option.label)),
+    );
+  },
+  Input(props) {
+    return React.createElement(
+      'span',
+      { className: props.className || '' },
+      props.icon,
+      React.createElement('input', {
+        type: props.type || 'text',
+        value: props.value,
+        placeholder: props.placeholder,
+        'aria-label': props['aria-label'],
+        onChange: props.onChange,
+      }),
+    );
+  },
+  Button({ variant, size, icon, children, ...rest }) {
+    return React.createElement('button', { type: 'button', 'data-variant': variant || 'default', ...rest },
+      icon, children);
+  },
+  Checkbox({ label, checked, onChange, className }) {
+    return React.createElement(
+      'label',
+      { className: className || '' },
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: checked === true,
+        onChange: (event) => { if (onChange) onChange(event.target.checked); },
+      }),
+      React.createElement('span', null, label),
+    );
+  },
   IconChevronDownOutlineRegular(props) {
     return React.createElement('span', { className: props && props.className ? props.className : 'icon-chevron' });
+  },
+  IconSearchOutlineRegular() {
+    return React.createElement('span', { className: 'icon-search-stub' });
   },
 };
 
@@ -298,7 +355,8 @@ if (!zhMarkup.includes('aria-label="分叉会话"')) throw new Error('fork actio
 if (!zhMarkup.includes('aria-label="复制 Session ID"')) throw new Error('copy action missing');
 if (!zhMarkup.includes('aria-label="取消置顶"')) throw new Error('unpin action missing for the pinned card');
 if (!zhMarkup.includes('aria-label="置顶会话"')) throw new Error('pin action missing for an unpinned card');
-// Action and tab icons are copied from the shipped Client UI primitives, not redrawn.
+// Action icons are copied from the shipped Client UI primitives, not redrawn (the
+// filter tabs themselves are native SegmentedTabs and carry no icons).
 for (const hostPath of [
   'M13.5 2.5H2.5C1.94772',
   'M9.96976 1.70572',
@@ -306,11 +364,6 @@ for (const hostPath of [
   'M1.01503 8.0001',
   'M11.9792 1.53296',
   'M14.5001 8C14.5 9.28552',
-  'M3.4041 13.096',
-  'M6 3.5h7.5M6 8h7.5M6 12.5h7.5',
-  'M12.596 12.596',
-  'M3.75 6.25C4.7165',
-  'M12.5303 6.53027',
 ]) {
   if (!zhMarkup.includes(hostPath)) throw new Error(`host icon path missing: ${hostPath}`);
 }
@@ -390,6 +443,14 @@ for (const needle of ['工作日国家/地区', 'skb-select', 'aria-haspopup="me
   if (!settingsMarkup.includes(needle)) throw new Error(`settings row missing: ${needle}`);
 }
 console.log('settings row OK');
+// Filter tabs / heat scale / search / header actions are the harness primitives now.
+if (!overviewMarkup.includes('mock-segmented-tabs')) throw new Error('filter tabs are not native SegmentedTabs');
+if (!overviewMarkup.includes('mock-segmented-control')) throw new Error('heat scale is not native SegmentedControl');
+if (!overviewMarkup.includes('placeholder="搜索标题、任务或目录"')) throw new Error('search is not the native Input');
+if (!overviewMarkup.includes('aria-label="会话筛选"')) throw new Error('tabs aria label missing');
+if (overviewMarkup.includes('skb-tab"')) throw new Error('custom tab markup still rendered');
+if (overviewMarkup.includes('skb-search"')) throw new Error('custom search input still rendered');
+console.log('native controls OK');
 // Default scale is the year: one cell per day of the current year, with 12 month labels.
 const currentYear = new Date().getFullYear();
 const expectedYearCells = new Date(currentYear, 1, 29).getMonth() === 1 ? 366 : 365;
