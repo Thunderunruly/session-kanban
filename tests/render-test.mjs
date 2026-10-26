@@ -22,10 +22,16 @@ if (!moduleRecord || moduleRecord.id !== 'dsh-session-kanban') throw new Error('
 
 // Shell UI primitives are provided by the module system; render a minimal stand-in.
 const primitivesStub = {
-  Menu({ open, anchor, items, selectedId, listClassName }) {
+  Menu({ open, anchor, items, selectedId, listClassName, align, side }) {
     return React.createElement(
       'div',
-      { className: 'mock-menu', 'data-open': open ? 'true' : 'false', 'data-list-class': listClassName || '' },
+      {
+        className: 'mock-menu',
+        'data-open': open ? 'true' : 'false',
+        'data-list-class': listClassName || '',
+        'data-align': align || '',
+        'data-side': side || '',
+      },
       anchor,
       open
         ? React.createElement('div', { className: 'mock-menu-items' }, (items || []).map((item) => React.createElement('span', {
@@ -87,6 +93,18 @@ const primitivesStub = {
         onChange: (event) => { if (onChange) onChange(event.target.checked); },
       }),
       React.createElement('span', null, label),
+    );
+  },
+  Tooltip({ label, side, align, children }) {
+    return React.createElement(
+      'span',
+      {
+        className: 'mock-tooltip',
+        'data-tip': label,
+        'data-side': side || '',
+        'data-align': align || '',
+      },
+      children,
     );
   },
   IconChevronDownOutlineRegular(props) {
@@ -355,6 +373,14 @@ if (!zhMarkup.includes('aria-label="分叉会话"')) throw new Error('fork actio
 if (!zhMarkup.includes('aria-label="复制 Session ID"')) throw new Error('copy action missing');
 if (!zhMarkup.includes('aria-label="取消置顶"')) throw new Error('unpin action missing for the pinned card');
 if (!zhMarkup.includes('aria-label="置顶会话"')) throw new Error('pin action missing for an unpinned card');
+// Hover actions use the native Tooltip primitive (bottom/end, delayed) instead of `title`.
+for (const tip of ['归档会话', '重命名', '分叉会话', '复制 Session ID', '置顶会话', '取消置顶']) {
+  if (!zhMarkup.includes(`data-tip="${tip}"`)) throw new Error(`native action tooltip missing: ${tip}`);
+}
+for (const needle of ['data-side="bottom"', 'data-align="end"']) {
+  if (!zhMarkup.includes(needle)) throw new Error(`action tooltip placement missing: ${needle}`);
+}
+if (zhMarkup.includes('title="归档会话"')) throw new Error('legacy title tooltip still rendered for archive');
 // Action icons are copied from the shipped Client UI primitives, not redrawn (the
 // filter tabs themselves are native SegmentedTabs and carry no icons).
 for (const hostPath of [
@@ -417,6 +443,23 @@ if (todosMarkup.includes('已全部完成')) throw new Error('todos tab still sh
 
 console.log('filter persistence OK');
 
+// Archived Sessions leave every tab and every aggregate count.
+globalThis.window.localStorage = makeStorage([['dsh.session-kanban.filter.v2', 'all']]);
+const archivedWorkspace = { pinnedSessionIds: [], archivedSessionIds: ['s-idle'] };
+const archivedCtx = makeContext(snapshot, 'zh', archivedWorkspace);
+client.apply(archivedCtx.ctx);
+const archivedMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(archivedCtx.getRegistered()[0].component, { ctx: archivedCtx.ctx }));
+if (archivedMarkup.includes('修复 BLE 断连')) throw new Error('archived session still rendered on the board');
+if (!archivedMarkup.includes('实现左侧栏会话看板')) throw new Error('archiving removed an unrelated session');
+globalThis.window.localStorage = makeStorage([['dsh.session-kanban.filter.v2', 'overview']]);
+const archivedOverviewCtx = makeContext(snapshot, 'zh', archivedWorkspace);
+client.apply(archivedOverviewCtx.ctx);
+const archivedOverviewMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(archivedOverviewCtx.getRegistered()[0].component, { ctx: archivedOverviewCtx.ctx }));
+if (!archivedOverviewMarkup.includes('5 个会话 · 1 个进行中')) {
+  throw new Error('overview still counts an archived session');
+}
+console.log('archive visibility OK');
+
 // Overview is the default home: aggregate cards plus a Year/Month/Week/Day heatmap.
 globalThis.window.localStorage = makeStorage([['dsh.session-kanban.filter.v2', 'overview']]);
 const overviewCtx = makeContext(snapshot, 'zh');
@@ -424,7 +467,16 @@ client.apply(overviewCtx.ctx);
 const overviewMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(overviewCtx.getRegistered()[0].component, { ctx: overviewCtx.ctx }));
 for (const needle of [
   '概览', '会话总数', '今日活跃', '待办完成', '活跃分布',
-  '年份', '高亮工作日', '高亮非工作日', '工作日按中国法定节假日',
+  '年份', '高亮工作日', '高亮非工作日',
+  // The working-calendar note is one compact row now: refresh icon, country, source.
+  'class="skb-heat-calendar"',
+  'skb-heat-calendar-country">China',
+  'aria-label="更新工作日日历"',
+  'href="https://github.com/NateScarlet/holiday-cn"',
+  '>Holiday CN</a>',
+  // The workday rule and the calendar status stay available as tooltips.
+  'data-tip="更新工作日日历"',
+  '工作日按中国法定节假日与调休标注',
   '使用内置日历数据',
   '搜索标题、任务或目录',
 ]) {
@@ -434,15 +486,88 @@ if (!overviewMarkup.includes('6 个会话 · 1 个进行中')) {
   throw new Error('overview lost the session totals');
 }
 
-// Settings -> General carries the working-calendar country row.
-const settingsRegistration = overviewCtx.getRegistered().find((item) => item && item.options && item.options.name === 'settings.general.item');
-if (!settingsRegistration) throw new Error('settings.general.item registration missing');
-if (settingsRegistration.options.id !== 'session-kanban-country') throw new Error('settings row id mismatch');
-const settingsMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(settingsRegistration.component, { ctx: overviewCtx.ctx }));
-for (const needle of ['工作日国家/地区', 'skb-select', 'aria-haspopup="menu"', 'China', 'skb-menu-list']) {
-  if (!settingsMarkup.includes(needle)) throw new Error(`settings row missing: ${needle}`);
+// The compact calendar row follows the active UI language too.
+const overviewEnCtx = makeContext(snapshot, 'en');
+client.apply(overviewEnCtx.ctx);
+const overviewEnMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(overviewEnCtx.getRegistered()[0].component, { ctx: overviewEnCtx.ctx }));
+for (const needle of ['>Holiday CN</a>', 'aria-label="Refresh workday calendar"']) {
+  if (!overviewEnMarkup.includes(needle)) throw new Error(`en overview markup missing: ${needle}`);
 }
-console.log('settings row OK');
+
+// A cached calendar shows its last refresh date in the same row as YYYY/MM/DD.
+const fetchedAt = new Date(2026, 9, 26, 12, 0, 0).getTime();
+globalThis.window.localStorage = makeStorage([
+  ['dsh.session-kanban.filter.v2', 'overview'],
+  ['dsh.session-kanban.calendar.v2', JSON.stringify({
+    countries: { CN: { fetchedAt, years: { 2026: { off: ['2026-01-01'], work: [] } } } },
+  })],
+]);
+const cacheDateCtx = makeContext(snapshot, 'zh');
+client.apply(cacheDateCtx.ctx);
+const cacheDateMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(cacheDateCtx.getRegistered()[0].component, { ctx: cacheDateCtx.ctx }));
+if (!cacheDateMarkup.includes('skb-heat-calendar-date')) throw new Error('calendar refresh date element missing');
+if (!cacheDateMarkup.includes('>2026/10/26</span>')) throw new Error('cached calendar refresh date missing');
+
+// Each country shows the source that actually seeded its calendar: China, Japan,
+// Korea, and Russia have dedicated datasets; everyone else uses Nager.Date.
+const sourceCases = [
+  ['CN', 'cn', 'Holiday CN', 'https://github.com/NateScarlet/holiday-cn'],
+  ['JP', 'jp', 'Holiday JP', 'https://github.com/holiday-jp/holiday_jp'],
+  ['KR', 'kr', 'Holiday KR', 'https://github.com/hyunbinseo/holidays-kr'],
+  ['RU', 'ru', 'isdayoff', 'https://isdayoff.ru'],
+  ['US', 'nager', 'Nager.Date', 'https://date.nager.at'],
+];
+const sourceYear = new Date().getFullYear();
+for (const [code, sourceId, sourceName, sourceUrl] of sourceCases) {
+  globalThis.window.localStorage = makeStorage([
+    ['dsh.session-kanban.filter.v2', 'overview'],
+    ['dsh.session-kanban.settings.v1', JSON.stringify({ country: code, refresh: '30d' })],
+    ['dsh.session-kanban.calendar.v2', JSON.stringify({
+      countries: {
+        [code]: {
+          fetchedAt: Date.now(),
+          years: { [sourceYear]: { off: [`${sourceYear}-01-01`], work: [] } },
+          source: sourceId,
+        },
+      },
+    })],
+  ]);
+  const sourceCtx = makeContext(snapshot, 'zh');
+  client.apply(sourceCtx.ctx);
+  const sourceMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(sourceCtx.getRegistered()[0].component, { ctx: sourceCtx.ctx }));
+  if (!sourceMarkup.includes(`>${sourceName}</a>`)) throw new Error(`calendar source name missing for ${code}: ${sourceName}`);
+  if (!sourceMarkup.includes(`href="${sourceUrl}"`)) throw new Error(`calendar source link missing for ${code}: ${sourceUrl}`);
+}
+// Restore the default settings used by the settings-row checks below.
+globalThis.window.localStorage.store.delete('dsh.session-kanban.settings.v1');
+
+// Settings -> General carries the working-calendar country and auto-refresh rows.
+const settingsRegistrations = overviewCtx.getRegistered()
+  .filter((item) => item && item.options && item.options.name === 'settings.general.item');
+if (settingsRegistrations.length !== 2) throw new Error(`expected 2 settings rows, got ${settingsRegistrations.length}`);
+const countryRegistration = settingsRegistrations.find((item) => item.options.id === 'session-kanban-country');
+const refreshRegistration = settingsRegistrations.find((item) => item.options.id === 'session-kanban-refresh');
+if (!countryRegistration) throw new Error('settings country registration missing');
+if (!refreshRegistration) throw new Error('settings refresh registration missing');
+if (countryRegistration.options.order !== 25 || refreshRegistration.options.order !== 26) throw new Error('settings row order mismatch');
+const settingsMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(countryRegistration.component, { ctx: overviewCtx.ctx }));
+for (const needle of ['工作日国家/地区', 'skb-select', 'aria-haspopup="menu"', 'China', 'skb-menu-list', 'data-align="end"', 'data-side="bottom"']) {
+  if (!settingsMarkup.includes(needle)) throw new Error(`country settings row missing: ${needle}`);
+}
+const refreshMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(refreshRegistration.component, { ctx: overviewCtx.ctx }));
+for (const needle of ['日历自动更新', '默认 1 个月', '1 个月', 'skb-select', 'aria-haspopup="menu"', 'data-align="end"']) {
+  if (!refreshMarkup.includes(needle)) throw new Error(`refresh settings row missing: ${needle}`);
+}
+// A stored auto-refresh interval is restored in the settings row.
+globalThis.window.localStorage.store.set('dsh.session-kanban.settings.v1', JSON.stringify({ country: 'CN', refresh: '90d' }));
+const refreshStoredCtx = makeContext(snapshot, 'zh');
+client.apply(refreshStoredCtx.ctx);
+const storedRegistration = refreshStoredCtx.getRegistered()
+  .find((item) => item && item.options && item.options.id === 'session-kanban-refresh');
+const storedMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(storedRegistration.component, { ctx: refreshStoredCtx.ctx }));
+if (!storedMarkup.includes('3 个月')) throw new Error('stored auto-refresh interval not restored');
+globalThis.window.localStorage.store.delete('dsh.session-kanban.settings.v1');
+console.log('settings rows OK');
 // Filter tabs / heat scale / search / header actions are the harness primitives now.
 if (!overviewMarkup.includes('mock-segmented-tabs')) throw new Error('filter tabs are not native SegmentedTabs');
 if (!overviewMarkup.includes('mock-segmented-control')) throw new Error('heat scale is not native SegmentedControl');

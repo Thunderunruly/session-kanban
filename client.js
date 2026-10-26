@@ -4,6 +4,8 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives');
     const Menu = primitives.Menu;
+    // Older hosts predate the Tooltip primitive; fall back to the bare anchor there.
+    const Tooltip = primitives.Tooltip || ((props) => props.children);
     const IconChevronDown = primitives.IconChevronDownOutlineRegular;
     const IconSearch = primitives.IconSearchOutlineRegular;
     const SegmentedTabs = primitives.SegmentedTabs;
@@ -29,12 +31,41 @@ window.__ModuleLoader__.load({
     const SETTINGS_STORAGE_KEY = 'dsh.session-kanban.settings.v1';
     const SETTINGS_EVENT = 'dsh-session-kanban:settings-changed';
     const CALENDAR_CACHE_KEY = 'dsh.session-kanban.calendar.v2';
-    const CALENDAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    // How often the browser refetches a country's working calendar; the Settings →
+    // General row writes this preference, and the manual refresh icon bypasses it.
+    const CALENDAR_REFRESH_OPTIONS = [
+      { id: '1d', days: 1 },
+      { id: '7d', days: 7 },
+      { id: '30d', days: 30 },
+      { id: '90d', days: 90 },
+      { id: '180d', days: 180 },
+      { id: '365d', days: 365 },
+    ];
+    const CALENDAR_REFRESH_MAP = new Map(CALENDAR_REFRESH_OPTIONS.map((option) => [option.id, option]));
+    const DEFAULT_CALENDAR_REFRESH = '30d';
     const HOLIDAY_CN_SOURCES = [
       (year) => `https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/${year}.json`,
       (year) => `https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/${year}.json`,
     ];
     const NAGER_URL = (year, code) => `https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`;
+    // Countries with statutory make-up/transfer working days or substitute
+    // holidays use a dedicated dataset; every other country falls back to
+    // Nager.Date public holidays plus its weekend rule.
+    const CALENDAR_SOURCE_META = {
+      cn: { name: 'Holiday CN', url: 'https://github.com/NateScarlet/holiday-cn' },
+      jp: { name: 'Holiday JP', url: 'https://github.com/holiday-jp/holiday_jp' },
+      kr: { name: 'Holiday KR', url: 'https://github.com/hyunbinseo/holidays-kr' },
+      ru: { name: 'isdayoff', url: 'https://isdayoff.ru' },
+      nager: { name: 'Nager.Date', url: 'https://date.nager.at' },
+    };
+    const COUNTRY_SOURCE = { CN: 'cn', JP: 'jp', KR: 'kr', RU: 'ru' };
+    const DEFAULT_SOURCE = 'nager';
+    const JAPAN_HOLIDAY_SOURCES = [
+      'https://cdn.jsdelivr.net/gh/holiday-jp/holiday_jp@master/holidays.yml',
+      'https://raw.githubusercontent.com/holiday-jp/holiday_jp/master/holidays.yml',
+    ];
+    const KOREA_HOLIDAY_URL = (year) => `https://cdn.jsdelivr.net/gh/hyunbinseo/holidays-kr@main/public/${year}.json`;
+    const RUSSIA_CALENDAR_URL = (year) => `https://isdayoff.ru/api/getdata?year=${year}`;
 
     // Supported workday calendars. `weekend` holds local weekend weekday indexes
     // (0 = Sunday); China additionally uses holiday-cn, which also carries the
@@ -110,22 +141,51 @@ window.__ModuleLoader__.load({
       return language.toLowerCase().startsWith('zh') ? config.zh : config.en;
     }
 
+    /** Dedicated source id for a country, or Nager.Date for the generic case. */
+    function preferredSourceId(code) {
+      return COUNTRY_SOURCE[code] || DEFAULT_SOURCE;
+    }
+
+    /** Display metadata for the source that actually produced the stored calendar. */
+    function calendarSource(code, usedSourceId) {
+      const id = usedSourceId && CALENDAR_SOURCE_META[usedSourceId]
+        ? usedSourceId
+        : preferredSourceId(code);
+      const meta = CALENDAR_SOURCE_META[id];
+      return { id, name: meta.name, url: meta.url };
+    }
+
     function readStoredSettings() {
       try {
         const parsed = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || 'null');
         const code = parsed && typeof parsed.country === 'string' ? parsed.country : DEFAULT_COUNTRY;
-        return { country: COUNTRY_MAP.has(code) ? code : DEFAULT_COUNTRY };
+        const refresh = parsed && typeof parsed.refresh === 'string' && CALENDAR_REFRESH_MAP.has(parsed.refresh)
+          ? parsed.refresh
+          : DEFAULT_CALENDAR_REFRESH;
+        return { country: COUNTRY_MAP.has(code) ? code : DEFAULT_COUNTRY, refresh };
       } catch (error) {
-        return { country: DEFAULT_COUNTRY };
+        return { country: DEFAULT_COUNTRY, refresh: DEFAULT_CALENDAR_REFRESH };
       }
     }
 
-    function persistSettings(next) {
+    /** Read-modify-write one settings field: country and refresh interval share one store. */
+    function persistSettings(patch) {
       try {
-        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ country: next.country }));
+        const current = readStoredSettings();
+        const next = { country: current.country, refresh: current.refresh, ...patch };
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
+          country: next.country,
+          refresh: next.refresh,
+        }));
       } catch (error) {
         /* storage may be unavailable */
       }
+    }
+
+    /** Auto-refresh interval for the working calendar, in milliseconds. */
+    function calendarRefreshMs() {
+      const option = CALENDAR_REFRESH_MAP.get(readStoredSettings().refresh) || CALENDAR_REFRESH_MAP.get(DEFAULT_CALENDAR_REFRESH);
+      return option.days * 24 * 60 * 60 * 1000;
     }
 
     function emitSettingsChanged() {
@@ -159,6 +219,12 @@ window.__ModuleLoader__.load({
       holidayIndex = buildHolidayIndex(country, { ...base, ...(years || {}) });
     }
 
+    /** Source id stored with a cache entry; older entries predate dedicated sources. */
+    function cachedSourceId(country, value) {
+      if (typeof value === 'string' && CALENDAR_SOURCE_META[value]) return value;
+      return country === 'CN' ? 'cn' : DEFAULT_SOURCE;
+    }
+
     function readStoredCalendar(country) {
       try {
         const parsed = JSON.parse(window.localStorage.getItem(CALENDAR_CACHE_KEY) || 'null');
@@ -166,11 +232,18 @@ window.__ModuleLoader__.load({
         if (parsed.countries && typeof parsed.countries === 'object') {
           const entry = parsed.countries[country];
           if (!entry || typeof entry !== 'object' || !entry.years || typeof entry.years !== 'object') return null;
-          return { fetchedAt: Number(entry.fetchedAt) || 0, years: entry.years };
+          return {
+            fetchedAt: Number(entry.fetchedAt) || 0,
+            years: entry.years,
+            source: cachedSourceId(country, entry.source),
+            // Pre-dedicated-source caches only hold Nager/China data; refresh them
+            // once so a newly added dedicated dataset takes over immediately.
+            legacy: typeof entry.source !== 'string',
+          };
         }
         // v1 shape held China-only data under { fetchedAt, years }.
         if (country === 'CN' && parsed.years && typeof parsed.years === 'object') {
-          return { fetchedAt: Number(parsed.fetchedAt) || 0, years: parsed.years };
+          return { fetchedAt: Number(parsed.fetchedAt) || 0, years: parsed.years, source: 'cn', legacy: true };
         }
         return null;
       } catch (error) {
@@ -178,7 +251,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function persistCalendar(country, years, fetchedAt) {
+    function persistCalendar(country, years, fetchedAt, sourceId) {
       try {
         let countries = {};
         try {
@@ -189,60 +262,133 @@ window.__ModuleLoader__.load({
         } catch (error) {
           /* start a fresh cache */
         }
-        countries[country] = { fetchedAt, years };
+        countries[country] = { fetchedAt, years, source: sourceId };
         window.localStorage.setItem(CALENDAR_CACHE_KEY, JSON.stringify({ countries }));
       } catch (error) {
         /* storage may be unavailable; the in-memory index still updates */
       }
     }
 
-    /**
-     * Fetch one year of a country's holiday calendar. China comes from holiday-cn
-     * (which also carries make-up workdays); every other country comes from
-     * date.nager.at public holidays and only contributes off days.
-     */
-    async function fetchHolidayYear(year, country) {
-      if (country === 'CN') {
-        for (const source of HOLIDAY_CN_SOURCES) {
-          try {
-            const response = await fetch(source(year), {
-              credentials: 'omit',
-              cache: 'no-store',
-              referrerPolicy: 'no-referrer',
-            });
-            if (!response.ok) continue;
-            const data = await response.json();
-            const off = [];
-            const work = [];
-            for (const day of (Array.isArray(data && data.days) ? data.days : [])) {
-              if (!day || typeof day.date !== 'string') continue;
-              if (day.isOffDay) off.push(day.date);
-              else work.push(day.date);
-            }
-            if (off.length === 0 && work.length === 0) continue;
-            return { off, work };
-          } catch (error) {
-            /* try the next mirror */
-          }
+    /** Fetch one URL once per refresh pass; a refresh re-reads everything. */
+    function fetchDocument(context, key, url, asText) {
+      if (context && context.cache.has(key)) return context.cache.get(key);
+      const request = (async () => {
+        try {
+          const response = await fetch(url, {
+            credentials: 'omit',
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer',
+          });
+          if (!response.ok) return null;
+          return asText ? await response.text() : await response.json();
+        } catch (error) {
+          return null;
         }
-        return null;
-      }
-      try {
-        const response = await fetch(NAGER_URL(year, country), {
-          credentials: 'omit',
-          cache: 'no-store',
-          referrerPolicy: 'no-referrer',
-        });
-        if (!response.ok) return null;
-        const data = await response.json();
+      })();
+      if (context) context.cache.set(key, request);
+      return request;
+    }
+
+    /** China statutory holidays plus State Council make-up workdays (holiday-cn). */
+    async function fetchHolidayCnYear(year, context) {
+      for (const source of HOLIDAY_CN_SOURCES) {
+        const data = await fetchDocument(context, `cn:${source(year)}`, source(year), false);
         const off = [];
-        for (const day of (Array.isArray(data) ? data : [])) {
-          if (day && typeof day.date === 'string') off.push(day.date);
+        const work = [];
+        for (const day of (Array.isArray(data && data.days) ? data.days : [])) {
+          if (!day || typeof day.date !== 'string') continue;
+          if (day.isOffDay) off.push(day.date);
+          else work.push(day.date);
         }
-        return off.length > 0 ? { off, work: [] } : null;
-      } catch (error) {
-        return null;
+        if (off.length === 0 && work.length === 0) continue;
+        return { off, work };
       }
+      return null;
+    }
+
+    /** Japan's official holidays incl. substitute holidays and citizens' holidays. */
+    async function fetchJapanYear(year, context) {
+      for (const url of JAPAN_HOLIDAY_SOURCES) {
+        const text = await fetchDocument(context, `jp:${url}`, url, true);
+        if (!text) continue;
+        const prefix = `${year}-`;
+        const off = [];
+        for (const line of text.split(/\r?\n/)) {
+          const match = /^(\d{4}-\d{2}-\d{2}):/.exec(line);
+          if (match && match[1].startsWith(prefix)) off.push(match[1]);
+        }
+        if (off.length > 0) return { off, work: [] };
+      }
+      return null;
+    }
+
+    /** Korea's official holidays incl. substitute holidays (holidays-kr). */
+    async function fetchKoreaYear(year, context) {
+      const data = await fetchDocument(context, `kr:${year}`, KOREA_HOLIDAY_URL(year), false);
+      if (!data || typeof data !== 'object') return null;
+      const prefix = `${year}-`;
+      const off = Object.keys(data).filter((key) => /^\d{4}-\d{2}-\d{2}$/.test(key) && key.startsWith(prefix));
+      return off.length > 0 ? { off, work: [] } : null;
+    }
+
+    /**
+     * Russia's production calendar (isdayoff.ru): a per-day working flag that
+     * already includes transferred days off, so weekend days flagged as working
+     * become explicit make-up workdays.
+     */
+    async function fetchRussiaYear(year, context) {
+      const text = await fetchDocument(context, `ru:${year}`, RUSSIA_CALENDAR_URL(year), true);
+      if (!text) return null;
+      const flags = text.trim();
+      const start = Date.UTC(year, 0, 1);
+      const off = [];
+      const work = [];
+      for (let index = 0; index < flags.length; index += 1) {
+        const flag = flags[index];
+        if (flag !== '0' && flag !== '1') continue;
+        const date = new Date(start + index * 24 * 60 * 60 * 1000);
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const key = `${date.getUTCFullYear()}-${month}-${day}`;
+        if (flag === '1') off.push(key);
+        else if (date.getUTCDay() === 0 || date.getUTCDay() === 6) work.push(key);
+      }
+      return off.length > 0 ? { off, work } : null;
+    }
+
+    /** Generic public holidays from date.nager.at (no make-up workdays). */
+    async function fetchNagerYear(year, country, context) {
+      const data = await fetchDocument(context, `nager:${year}:${country}`, NAGER_URL(year, country), false);
+      const off = [];
+      for (const day of (Array.isArray(data) ? data : [])) {
+        if (day && typeof day.date === 'string') off.push(day.date);
+      }
+      return off.length > 0 ? { off, work: [] } : null;
+    }
+
+    const COUNTRY_HOLIDAY_FETCHERS = {
+      cn: fetchHolidayCnYear,
+      jp: fetchJapanYear,
+      kr: fetchKoreaYear,
+      ru: fetchRussiaYear,
+    };
+
+    /**
+     * Fetch one year of the selected country's working calendar. Countries with a
+     * dedicated dataset are tried first and fall back to Nager.Date per year when
+     * that dataset is unreachable; China has no fallback because Nager lacks its
+     * make-up workdays and the embedded snapshot covers the offline case.
+     */
+    async function fetchHolidayYear(year, country, context) {
+      const preferred = preferredSourceId(country);
+      const dedicated = COUNTRY_HOLIDAY_FETCHERS[preferred];
+      if (dedicated) {
+        const data = await dedicated(year, context);
+        if (data) return { ...data, source: preferred };
+      }
+      if (preferred === 'cn') return null;
+      const fallback = await fetchNagerYear(year, country, context);
+      return fallback ? { ...fallback, source: DEFAULT_SOURCE } : null;
     }
 
     /** Years worth refreshing: current, next, and the two before it. */
@@ -270,10 +416,12 @@ window.__ModuleLoader__.load({
     async function refreshHolidayCalendar(force) {
       const country = readStoredSettings().country;
       const cached = readStoredCalendar(country);
-      if (!force && cached && Date.now() - cached.fetchedAt < CALENDAR_TTL_MS) {
+      const fallbackSourceId = cached ? cached.source : preferredSourceId(country);
+      if (!force && cached && !cached.legacy && Date.now() - cached.fetchedAt < calendarRefreshMs()) {
         return {
           country,
           source: 'cache',
+          sourceId: fallbackSourceId,
           updatedAt: cached.fetchedAt,
           years: Object.keys(cached.years).length,
           failed: false,
@@ -282,26 +430,37 @@ window.__ModuleLoader__.load({
       if (calendarRefreshPromise && calendarRefreshCountry === country) return calendarRefreshPromise;
       const promise = (async () => {
         try {
+          const context = { cache: new Map() };
           const results = {};
+          const usedSources = new Set();
           for (const year of calendarYearsToFetch()) {
-            const data = await fetchHolidayYear(year, country);
-            if (data) results[year] = data;
+            const data = await fetchHolidayYear(year, country, context);
+            if (!data) continue;
+            results[year] = { off: data.off, work: data.work };
+            if (data.source) usedSources.add(data.source);
           }
           if (Object.keys(results).length === 0) {
             return {
               country,
               source: cached ? 'cache' : 'embedded',
+              sourceId: fallbackSourceId,
               updatedAt: cached ? cached.fetchedAt : 0,
               years: cached ? Object.keys(cached.years).length : 0,
               failed: true,
+              empty: !cached,
             };
           }
+          const preferred = preferredSourceId(country);
+          const sourceId = usedSources.has(preferred)
+            ? preferred
+            : (usedSources.values().next().value || preferred);
           const merged = { ...((cached && cached.years) || {}), ...results };
           installHolidays(country, merged);
-          persistCalendar(country, merged, Date.now());
+          persistCalendar(country, merged, Date.now(), sourceId);
           return {
             country,
             source: 'network',
+            sourceId,
             updatedAt: Date.now(),
             years: Object.keys(merged).length,
             failed: false,
@@ -310,9 +469,11 @@ window.__ModuleLoader__.load({
           return {
             country,
             source: cached ? 'cache' : 'embedded',
+            sourceId: fallbackSourceId,
             updatedAt: cached ? cached.fetchedAt : 0,
             years: cached ? Object.keys(cached.years).length : 0,
             failed: true,
+            empty: !cached,
           };
         }
       })();
@@ -391,16 +552,26 @@ window.__ModuleLoader__.load({
       'heat.legend.default': '活跃度',
       'heat.legend.workday': '工作日',
       'heat.legend.offday': '非工作日',
-      'heat.holidayNote': '工作日按中国法定节假日与调休标注（自动更新，来源 holiday-cn）',
-      'heat.calendar.refresh': '更新',
-      'heat.calendar.refreshing': '更新中…',
+      'heat.holidayNote.cn': '工作日按中国法定节假日与调休标注（自动更新）',
+      'heat.holidayNote.other': '工作日按当地公共假日与调休/补班规则标注（自动更新）',
+      'heat.calendar.refreshAria': '更新工作日日历',
+      'heat.calendar.updating': '更新中…',
       'heat.calendar.loading': '正在更新日历数据…',
       'heat.calendar.network': '日历已更新（{country} · {years} 年 · {time}）',
       'heat.calendar.cache': '使用缓存日历（{country} · {time}）',
       'heat.calendar.embedded': '使用内置日历数据（{country}）',
+      'heat.calendar.unavailable': '暂未找到该国家/地区的节假日数据，工作日仅按周末规则标注（{country}）',
       'heat.calendar.error': '日历更新失败，使用本地数据（{country}）',
       'settings.country.label': '工作日国家/地区',
-      'settings.country.hint': '影响看板热力图的工作日/非工作日标注：中国使用法定节假日与调休，其他国家使用公共假日与当地周末规则。',
+      'settings.country.hint': '影响看板热力图的工作日/非工作日标注：中国、日本、韩国、俄罗斯使用各自的官方节假日/生产日历（含调休、补班或替代休日），其他国家使用公共假日与当地周末规则。',
+      'settings.refresh.label': '日历自动更新',
+      'settings.refresh.hint': '浏览器自动重新获取工作日日历的间隔；在热力图侧栏点刷新图标可随时立即更新。默认 1 个月。',
+      'settings.refresh.1d': '1 天',
+      'settings.refresh.7d': '1 周',
+      'settings.refresh.30d': '1 个月',
+      'settings.refresh.90d': '3 个月',
+      'settings.refresh.180d': '6 个月',
+      'settings.refresh.365d': '1 年',
       'heat.meta.year': '{year} 年',
       'heat.meta.month': '{year} 年 {month} 月',
       'heat.meta.week': '{start} – {end}',
@@ -506,16 +677,26 @@ window.__ModuleLoader__.load({
       'heat.legend.default': 'Activity',
       'heat.legend.workday': 'Workdays',
       'heat.legend.offday': 'Non-workdays',
-      'heat.holidayNote': 'Workdays follow China statutory holidays and make-up days (auto-updated from holiday-cn)',
-      'heat.calendar.refresh': 'Refresh',
-      'heat.calendar.refreshing': 'Updating…',
+      'heat.holidayNote.cn': 'Workdays follow China statutory holidays and make-up days (auto-updated)',
+      'heat.holidayNote.other': 'Workdays follow local public holidays and make-up/transfer rules (auto-updated)',
+      'heat.calendar.refreshAria': 'Refresh workday calendar',
+      'heat.calendar.updating': 'Updating…',
       'heat.calendar.loading': 'Updating calendar…',
       'heat.calendar.network': 'Calendar updated ({country} · {years} years · {time})',
       'heat.calendar.cache': 'Cached calendar ({country} · {time})',
       'heat.calendar.embedded': 'Built-in calendar data ({country})',
+      'heat.calendar.unavailable': 'No holiday data found for this country; weekdays follow the weekend rule only ({country})',
       'heat.calendar.error': 'Calendar update failed, using local data ({country})',
       'settings.country.label': 'Workday calendar',
-      'settings.country.hint': 'Controls the workday/offday shading: China uses statutory holidays plus make-up workdays; other countries use public holidays and their local weekend rule.',
+      'settings.country.hint': 'Controls the workday/offday shading: China, Japan, South Korea, and Russia use their own official holiday or production calendars (including make-up days and substitute holidays); other countries use public holidays and their local weekend rule.',
+      'settings.refresh.label': 'Auto-update calendar',
+      'settings.refresh.hint': 'How often the browser refetches the workday calendar; the refresh icon in the heatmap sidebar updates it immediately at any time. Defaults to 1 month.',
+      'settings.refresh.1d': '1 day',
+      'settings.refresh.7d': '1 week',
+      'settings.refresh.30d': '1 month',
+      'settings.refresh.90d': '3 months',
+      'settings.refresh.180d': '6 months',
+      'settings.refresh.365d': '1 year',
       'heat.meta.year': '{year}',
       'heat.meta.month': '{month}/{year}',
       'heat.meta.week': '{start} – {end}',
@@ -716,6 +897,12 @@ window.__ModuleLoader__.load({
     function shortDate(time) {
       const date = new Date(time);
       return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+
+    /** Full calendar refresh date, e.g. 2026/10/26. */
+    function fullDate(time) {
+      const date = new Date(time);
+      return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
     }
 
     /** Monday 00:00 of the week containing `time`. */
@@ -1110,10 +1297,9 @@ window.__ModuleLoader__.load({
 .skb-select--block{width:100%;justify-content:space-between}
 .skb-select--scope{max-width:280px}
 .skb-select--platform{flex:none;white-space:nowrap}
-/* Long option lists (teams, countries, weeks) scroll inside a bounded menu instead of
-   stretching to the full viewport height; the shell's scrollable list already makes the
-   viewport scroll, this only caps the surface height. */
-.skb-menu-list{max-height:min(400px,calc(100vh - 120px))}
+/* Long option lists scroll inside a card sized to the free side of the trigger
+   (the class is doubled so it outranks the primitive's viewport-based max-height). */
+.skb-menu-list.skb-menu-list{max-height:var(--skb-menu-max-height,320px)}
 .skb-date-input{width:100%;cursor:default;color-scheme:inherit}
 .skb-search-field{width:236px;max-width:100%}
 .skb-overview{display:flex;flex-direction:column;gap:14px;min-width:0}
@@ -1127,7 +1313,11 @@ window.__ModuleLoader__.load({
 .skb-panel-title{display:flex;flex-direction:column;gap:2px;min-width:0}
 .skb-panel-title strong{font-size:14px;line-height:20px;font-weight:600}
 .skb-panel-title span{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary)}
-.skb-scale{width:100%}
+.skb-scale{width:100%;box-sizing:border-box}
+/* The native control sizes every segment to its widest label; the heatmap column
+   is narrower than a settings card, so compact the four scale segments until both
+   zh and en labels fit inside the track instead of spilling out of it. */
+.skb-scale > button{padding:0 4px}
 .skb-heat-body{display:flex;align-items:flex-start;gap:6px;min-width:0}
 .skb-heat-days{display:flex;flex-direction:column;gap:3px;flex:none;width:18px}
 .skb-heat-day{height:13px;font-size:10px;line-height:13px;color:var(--dsw-alias-label-secondary);text-align:right}
@@ -1169,15 +1359,22 @@ window.__ModuleLoader__.load({
 .skb-heat-swatch.is-offday.lvl-4{opacity:1}
 .skb-heat-meta{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary)}
 .skb-heat-layout{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;min-width:0}
-.skb-heat-side{display:flex;flex-direction:column;gap:12px;flex:none;width:216px;max-width:100%;min-width:0}
+.skb-heat-side{display:flex;flex-direction:column;gap:12px;flex:none;width:200px;max-width:100%;min-width:0}
 .skb-heat-main{display:flex;flex-direction:column;gap:10px;flex:1 1 320px;min-width:0}
 .skb-heat-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .skb-heat-field-label{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.skb-heat-note{margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.skb-heat-calendar{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
-.skb-link-btn{border:0;background:none;padding:0;font:inherit;font-size:11px;line-height:16px;color:var(--dsw-alias-brand-primary);cursor:pointer;text-decoration:underline}
-.skb-link-btn:hover{opacity:.8}
-.skb-link-btn[disabled]{opacity:.5;cursor:default}
+/* Compact working-calendar note: refresh icon, country, data source. The status sentence
+   and the workday rule stay available as tooltips instead of two wrapped text lines. */
+.skb-heat-calendar{display:flex;align-items:center;gap:4px;min-width:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.skb-heat-calendar .skb-icon-btn{flex:none;width:20px;height:20px;color:var(--dsw-alias-label-secondary)}
+.skb-heat-calendar-country{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skb-heat-calendar-date{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+.skb-heat-calendar-sep{flex:none;opacity:.6}
+.skb-heat-calendar-source{flex:none;color:var(--dsw-alias-brand-primary);text-decoration:none}
+.skb-heat-calendar-source:hover{text-decoration:underline}
+.skb-icon-btn.is-spinning svg{animation:skb-spin .9s linear infinite}
+@keyframes skb-spin{to{transform:rotate(360deg)}}
+.skb-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .skb-settings-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}
 .skb-settings-text{display:flex;flex:1;flex-direction:column;min-width:0}
 .skb-settings-label{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:20px}
@@ -1246,13 +1443,15 @@ window.__ModuleLoader__.load({
 .skb-todo-alldone{display:flex;align-items:center;gap:6px;margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-state-success-primary)}
 .skb-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1)}
 .skb-cwd{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}
-.skb-actions{display:flex;align-items:center;gap:4px;flex:none;opacity:0;transition:opacity .15s}
+.skb-actions{display:flex;align-items:center;gap:15px;flex:none;opacity:0;transition:opacity .15s}
 .skb-card:hover .skb-actions,.skb-card:focus-within .skb-actions{opacity:1}
-.skb-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background .15s,color .15s}
-.skb-icon-btn:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}
-.skb-icon-btn.is-active{color:var(--dsw-alias-brand-primary)}
+/* Card hover actions reuse the native Session-row action geometry: a 16px hit
+   area with a 14px icon, tertiary label colour, and colour (not fill) feedback. */
+.skb-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:none;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary,var(--dsw-alias-label-secondary));cursor:pointer;flex:none;transition:color .15s}
+.skb-icon-btn:hover{color:var(--dsw-alias-label-primary)}
+.skb-icon-btn:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px}
+.skb-icon-btn.is-active{color:var(--dsw-alias-label-primary)}
 .skb-icon-btn[disabled]{opacity:.5;cursor:default}
-.skb-icon-btn.is-danger:hover{color:var(--dsw-alias-state-error-primary)}
 .skb-confirm{display:flex;align-items:center;gap:6px}
 .skb-confirm-text{font-size:11.5px;color:var(--dsw-alias-state-warn-primary);white-space:nowrap}
 .skb-confirm .skb-btn{height:26px;padding:0 9px;font-size:12px}
@@ -1296,8 +1495,8 @@ window.__ModuleLoader__.load({
         const country = readStoredSettings().country;
         const cached = readStoredCalendar(country);
         return cached
-          ? { country, source: 'cache', updatedAt: cached.fetchedAt, years: Object.keys(cached.years).length, failed: false }
-          : { country, source: 'embedded', updatedAt: 0, years: 0, failed: false };
+          ? { country, source: 'cache', sourceId: cached.source, updatedAt: cached.fetchedAt, years: Object.keys(cached.years).length, failed: false }
+          : { country, source: 'embedded', sourceId: preferredSourceId(country), updatedAt: 0, years: 0, failed: false };
       });
       const [localeTick, setLocaleTick] = useState(0);
       const [refreshing, setRefreshing] = useState(false);
@@ -1341,6 +1540,13 @@ window.__ModuleLoader__.load({
         return Array.isArray(value) ? value : [];
       }, [workspaceSnapshot]);
       const pinnedOrder = useMemo(() => new Map(pinnedIds.map((id, index) => [id, index])), [pinnedIds]);
+      // The host keeps archived Sessions in the Session list; the workspace
+      // snapshot's registry-global archive set is what hides them (same as the
+      // native sidebar), so the board filters them out of every tab and count.
+      const archivedIds = useMemo(() => {
+        const value = workspaceSnapshot && workspaceSnapshot.archivedSessionIds;
+        return new Set(Array.isArray(value) ? value : []);
+      }, [workspaceSnapshot]);
 
       const boundT = useMemo(() => {
         void localeTick;
@@ -1374,8 +1580,8 @@ window.__ModuleLoader__.load({
           installHolidays(next, cached ? cached.years : null);
           setCalendarTick((value) => value + 1);
           setCalendarInfo(cached
-            ? { country: next, source: 'cache', updatedAt: cached.fetchedAt, years: Object.keys(cached.years).length, failed: false }
-            : { country: next, source: 'embedded', updatedAt: 0, years: 0, failed: false });
+            ? { country: next, source: 'cache', sourceId: cached.source, updatedAt: cached.fetchedAt, years: Object.keys(cached.years).length, failed: false }
+            : { country: next, source: 'embedded', sourceId: preferredSourceId(next), updatedAt: 0, years: 0, failed: false });
           refreshCalendar(false);
         };
         window.addEventListener(SETTINGS_EVENT, onChange);
@@ -1392,6 +1598,7 @@ window.__ModuleLoader__.load({
         for (const id of ids) {
           const entry = byId[id];
           if (!entry) continue;
+          if (archivedIds.has(id)) continue;
           const fallback = overlay.get(id);
           const pinned = pinnedOrder.has(id);
           const overlayValues = fallback || null;
@@ -1416,7 +1623,7 @@ window.__ModuleLoader__.load({
           return right.updatedAt - left.updatedAt;
         });
         return built;
-      }, [sessionSnapshot, overlayTick, boundT, pinnedOrder]);
+      }, [sessionSnapshot, overlayTick, boundT, pinnedOrder, archivedIds]);
 
       const teamInfo = useMemo(() => {
         const teams = [];
@@ -1700,18 +1907,26 @@ window.__ModuleLoader__.load({
           return '';
         };
         const dayTitle = (cell) => `${fill(boundT('heat.dayCount'), { date: cell.key, count: cell.count })} · ${boundT(cell.kind === 'work' ? 'heat.kind.work' : 'heat.kind.off')}`;
-        const countryLabel = countryName(calendarInfo.country || readStoredSettings().country);
+        const calendarCountry = calendarInfo.country || readStoredSettings().country;
+        const countryLabel = countryName(calendarCountry);
+        const calendarSourceInfo = calendarSource(calendarCountry, calendarInfo.sourceId);
         const calendarStatus = calendarLoading
           ? boundT('heat.calendar.loading')
           : calendarInfo.source === 'network'
             ? fill(boundT('heat.calendar.network'), {
               country: countryLabel,
               years: calendarInfo.years || 0,
-              time: shortDate(calendarInfo.updatedAt),
+              time: fullDate(calendarInfo.updatedAt),
             })
             : calendarInfo.source === 'cache'
-              ? fill(boundT('heat.calendar.cache'), { country: countryLabel, time: shortDate(calendarInfo.updatedAt) })
-              : fill(boundT(calendarInfo.failed ? 'heat.calendar.error' : 'heat.calendar.embedded'), { country: countryLabel });
+              ? fill(boundT('heat.calendar.cache'), { country: countryLabel, time: fullDate(calendarInfo.updatedAt) })
+              : calendarInfo.empty
+                ? fill(boundT('heat.calendar.unavailable'), { country: countryLabel })
+                : fill(boundT(calendarInfo.failed ? 'heat.calendar.error' : 'heat.calendar.embedded'), { country: countryLabel });
+        const calendarNote = boundT(calendarCountry === 'CN' ? 'heat.holidayNote.cn' : 'heat.holidayNote.other');
+        const calendarDate = calendarLoading
+          ? boundT('heat.calendar.updating')
+          : (calendarInfo.updatedAt ? fullDate(calendarInfo.updatedAt) : '');
 
         let periodControl;
         if (heatScale === 'year') {
@@ -1923,16 +2138,55 @@ window.__ModuleLoader__.load({
                     persistHighlight(next);
                   },
                 }),
-                h('p', { key: 'note', className: 'skb-heat-note' }, boundT('heat.holidayNote')),
-                h('div', { key: 'calendar', className: 'skb-heat-calendar' }, [
-                  h('span', { key: 'text', className: 'skb-heat-note' }, calendarStatus),
-                  h('button', {
+                h('div', {
+                  key: 'calendar',
+                  className: 'skb-heat-calendar',
+                }, [
+                  h(Tooltip, {
                     key: 'refresh',
+                    label: boundT('heat.calendar.refreshAria'),
+                    side: 'bottom',
+                    align: 'end',
+                    delayMs: 500,
+                    portal: true,
+                  }, h('button', {
+                    key: 'refresh-button',
                     type: 'button',
-                    className: 'skb-link-btn',
+                    className: `skb-icon-btn${calendarLoading ? ' is-spinning' : ''}`,
+                    'aria-label': boundT('heat.calendar.refreshAria'),
                     disabled: calendarLoading,
                     onClick: () => refreshCalendar(true),
-                  }, calendarLoading ? boundT('heat.calendar.refreshing') : boundT('heat.calendar.refresh')),
+                  }, h(IconRefresh))),
+                  h(Tooltip, {
+                    key: 'country',
+                    label: calendarNote,
+                    side: 'bottom',
+                    align: 'end',
+                    delayMs: 500,
+                    portal: true,
+                  }, h('span', { key: 'country-label', className: 'skb-heat-calendar-country' }, countryLabel)),
+                  calendarDate
+                    ? h('span', { key: 'sep-date', className: 'skb-heat-calendar-sep', 'aria-hidden': true }, '·')
+                    : null,
+                  calendarDate
+                    ? h(Tooltip, {
+                      key: 'date',
+                      label: calendarStatus,
+                      side: 'bottom',
+                      align: 'end',
+                      delayMs: 500,
+                      portal: true,
+                    }, h('span', { key: 'date-label', className: 'skb-heat-calendar-date' }, calendarDate))
+                    : null,
+                  h('span', { key: 'sep', className: 'skb-heat-calendar-sep', 'aria-hidden': true }, '·'),
+                  h('a', {
+                    key: 'source',
+                    className: 'skb-heat-calendar-source',
+                    href: calendarSourceInfo.url,
+                    target: '_blank',
+                    rel: 'noreferrer noopener',
+                  }, calendarSourceInfo.name),
+                  h('span', { key: 'status', className: 'skb-sr-only', 'aria-live': 'polite' }, calendarStatus),
                 ]),
               ]),
               h('div', { key: 'main', className: 'skb-heat-main' }, [
@@ -2037,6 +2291,35 @@ window.__ModuleLoader__.load({
           /* the host navigation reports its own failures */
         }
       }, [ctx]);
+
+      // A card only navigates on a deliberate, stationary click on its content:
+      // dragging (text selection, scroll gestures) or a selection inside the card
+      // must not open the session when the pointer is released.
+      const cardPressRef = useRef({ active: false, x: 0, y: 0, moved: false });
+      const beginCardPress = useCallback((event) => {
+        if (event.button !== 0 && event.pointerType === 'mouse') return;
+        cardPressRef.current = { active: true, x: event.clientX, y: event.clientY, moved: false };
+      }, []);
+      const trackCardPress = useCallback((event) => {
+        const press = cardPressRef.current;
+        if (!press.active || press.moved) return;
+        if (Math.abs(event.clientX - press.x) > 8 || Math.abs(event.clientY - press.y) > 8) {
+          press.moved = true;
+        }
+      }, []);
+      const activateCard = useCallback((event, sessionId) => {
+        const press = cardPressRef.current;
+        press.active = false;
+        if (press.moved) return;
+        const selection = typeof window !== 'undefined' && typeof window.getSelection === 'function'
+          ? window.getSelection()
+          : null;
+        if (selection && !selection.isCollapsed && String(selection.toString()).trim()
+          && selection.anchorNode && event.currentTarget && event.currentTarget.contains(selection.anchorNode)) {
+          return;
+        }
+        openSession(sessionId);
+      }, [openSession]);
 
       const startSession = useCallback(() => {
         try {
@@ -2187,6 +2470,9 @@ window.__ModuleLoader__.load({
       }, [boundT, showNotice]);
 
       const onCardKeyDown = useCallback((event, sessionId) => {
+        // Only the card itself activates the session; Enter/Space on the footer
+        // actions (or the rename field) must stay with those controls.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           openSession(sessionId);
@@ -2233,13 +2519,32 @@ window.__ModuleLoader__.load({
         const isBusy = busyId === row.sessionId;
         const confirming = archiveTarget === row.sessionId;
         const timeText = relativeTime(row.updatedAt, boundT);
+        /** One hover action: native row-action geometry plus the native Tooltip bubble. */
+        const actionButton = (key, label, icon, onClick, extraClass) => h(Tooltip, {
+          key,
+          label,
+          side: 'bottom',
+          align: 'end',
+          delayMs: 500,
+          portal: true,
+        }, h('button', {
+          key: `${key}-button`,
+          type: 'button',
+          className: `skb-icon-btn${extraClass || ''}`,
+          'aria-label': label,
+          disabled: isBusy,
+          onClick,
+        }, icon));
         return h('article', {
           key: row.sessionId,
           className: `skb-card${row.running ? ' is-running' : ''}`,
           role: 'button',
           tabIndex: 0,
           'aria-label': row.title || boundT('meta.untitled'),
-          onClick: () => openSession(row.sessionId),
+          onClick: (event) => activateCard(event, row.sessionId),
+          onPointerDown: beginCardPress,
+          onPointerMove: trackCardPress,
+          onPointerCancel: () => { cardPressRef.current.active = false; },
           onKeyDown: (event) => onCardKeyDown(event, row.sessionId),
         }, [
           h('div', { key: 'top', className: 'skb-card-top' }, [
@@ -2327,7 +2632,13 @@ window.__ModuleLoader__.load({
                 boundT(hiddenAllDone ? 'todo.moreDone' : 'todo.moreHidden', { n: hiddenTodos }))
               : null,
           ]),
-          h('footer', { key: 'foot', className: 'skb-card-foot' }, [
+          // The footer is a toolbar, not part of the open-session hit area: clicks
+          // between the hover actions must not navigate (misclicks stay no-ops).
+          h('footer', {
+            key: 'foot',
+            className: 'skb-card-foot',
+            onClick: (event) => event.stopPropagation(),
+          }, [
             h('span', { key: 'cwd', className: 'skb-cwd', title: row.cwd }, baseName(row.cwd)),
             h('div', { key: 'actions', className: 'skb-actions' }, confirming
               ? [
@@ -2356,66 +2667,32 @@ window.__ModuleLoader__.load({
                 ]),
               ]
               : [
-                h('button', {
-                  key: 'pin',
-                  type: 'button',
-                  className: `skb-icon-btn${row.pinned ? ' is-active' : ''}`,
-                  title: row.pinned ? boundT('action.unpin') : boundT('action.pin'),
-                  'aria-label': row.pinned ? boundT('action.unpin') : boundT('action.pin'),
-                  disabled: isBusy,
-                  onClick: (event) => {
+                actionButton(
+                  'pin',
+                  row.pinned ? boundT('action.unpin') : boundT('action.pin'),
+                  h(IconPin, { filled: row.pinned }),
+                  (event) => {
                     event.stopPropagation();
                     togglePin(row);
                   },
-                }, h(IconPin, { filled: row.pinned })),
-                h('button', {
-                  key: 'rename',
-                  type: 'button',
-                  className: 'skb-icon-btn',
-                  title: boundT('action.rename'),
-                  'aria-label': boundT('action.rename'),
-                  disabled: isBusy,
-                  onClick: (event) => {
-                    event.stopPropagation();
-                    beginRename(row);
-                  },
-                }, h(IconRename)),
-                h('button', {
-                  key: 'fork',
-                  type: 'button',
-                  className: 'skb-icon-btn',
-                  title: boundT('action.fork'),
-                  'aria-label': boundT('action.fork'),
-                  disabled: isBusy,
-                  onClick: (event) => {
-                    event.stopPropagation();
-                    forkSession(row);
-                  },
-                }, h(IconFork)),
-                h('button', {
-                  key: 'archive',
-                  type: 'button',
-                  className: 'skb-icon-btn is-danger',
-                  title: boundT('action.archive'),
-                  'aria-label': boundT('action.archive'),
-                  disabled: isBusy,
-                  onClick: (event) => {
-                    event.stopPropagation();
-                    setArchiveTarget(row.sessionId);
-                  },
-                }, h(IconArchive)),
-                h('button', {
-                  key: 'copy',
-                  type: 'button',
-                  className: 'skb-icon-btn',
-                  title: boundT('action.copyId'),
-                  'aria-label': boundT('action.copyId'),
-                  disabled: isBusy,
-                  onClick: (event) => {
-                    event.stopPropagation();
-                    copySessionId(row);
-                  },
-                }, h(IconCopy)),
+                  row.pinned ? ' is-active' : '',
+                ),
+                actionButton('rename', boundT('action.rename'), h(IconRename), (event) => {
+                  event.stopPropagation();
+                  beginRename(row);
+                }),
+                actionButton('fork', boundT('action.fork'), h(IconFork), (event) => {
+                  event.stopPropagation();
+                  forkSession(row);
+                }),
+                actionButton('archive', boundT('action.archive'), h(IconArchive), (event) => {
+                  event.stopPropagation();
+                  setArchiveTarget(row.sessionId);
+                }),
+                actionButton('copy', boundT('action.copyId'), h(IconCopy), (event) => {
+                  event.stopPropagation();
+                  copySessionId(row);
+                }),
               ]),
           ]),
         ]);
@@ -2487,13 +2764,14 @@ window.__ModuleLoader__.load({
                 boundT('panel.subtitle', { total: scopedRows.length, running: runningCount })),
             ]),
             h('div', { key: 'actions', className: 'skb-head-actions' }, [
+              // Native Button + visible label: no `title`, matching the host's own
+              // labelled buttons (raw browser tooltips would break the hover style).
               h(Button, {
                 key: 'refresh',
                 variant: 'outline',
                 size: 'sm',
                 icon: h(IconRefresh, { key: 'icon' }),
                 disabled: refreshing,
-                title: boundT('action.refresh'),
                 onClick: () => refreshAll(),
               }, boundT('action.refresh')),
               h(Button, {
@@ -2501,7 +2779,6 @@ window.__ModuleLoader__.load({
                 variant: 'primary',
                 size: 'sm',
                 icon: h(IconNewChat, { key: 'icon' }),
-                title: boundT('action.newSession'),
                 onClick: startSession,
               }, boundT('action.newSession')),
             ]),
@@ -2607,10 +2884,42 @@ window.__ModuleLoader__.load({
     /** Theme-native dropdown: a trigger button plus the shell's own Menu surface. */
     function KanbanSelect(props) {
       const [open, setOpen] = useState(false);
+      const [side, setSide] = useState('bottom');
+      const triggerRef = useRef(null);
       const options = Array.isArray(props.options) ? props.options : [];
       const active = options.find((option) => option.id === props.value) || options[0];
       const className = ['skb-select', props.className || ''].filter(Boolean).join(' ');
+      /**
+       * Fit the dropdown card to the space on the trigger's better side. Long
+       * option lists (countries, weeks) then scroll inside the card instead of
+       * being clamped back up over the trigger and the rows above it.
+       */
+      const fitMenu = useCallback(() => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        const node = triggerRef.current;
+        const rect = node ? node.getBoundingClientRect() : null;
+        if (!rect || !window.innerHeight) return;
+        const margin = 12;
+        const gap = 4;
+        const spaceBelow = window.innerHeight - rect.bottom - margin - gap;
+        const spaceAbove = rect.top - margin - gap;
+        const nextSide = spaceBelow >= spaceAbove ? 'bottom' : 'top';
+        const maxHeight = Math.max(120, Math.min(360, nextSide === 'bottom' ? spaceBelow : spaceAbove));
+        document.documentElement.style.setProperty('--skb-menu-max-height', `${maxHeight}px`);
+        setSide((current) => (current === nextSide ? current : nextSide));
+      }, []);
+      useEffect(() => {
+        if (!open) return undefined;
+        fitMenu();
+        window.addEventListener('resize', fitMenu);
+        window.addEventListener('scroll', fitMenu, true);
+        return () => {
+          window.removeEventListener('resize', fitMenu);
+          window.removeEventListener('scroll', fitMenu, true);
+        };
+      }, [open, fitMenu]);
       const anchor = h('button', {
+        ref: triggerRef,
         type: 'button',
         className,
         'aria-haspopup': 'menu',
@@ -2619,6 +2928,7 @@ window.__ModuleLoader__.load({
         disabled: props.disabled === true,
         onClick: () => {
           if (props.disabled === true) return;
+          if (!open) fitMenu();
           setOpen((value) => !value);
         },
       }, [
@@ -2635,6 +2945,7 @@ window.__ModuleLoader__.load({
           if (props.onSelect) props.onSelect(id);
         },
         align: props.align || 'start',
+        side,
         portal: true,
         listClassName: 'skb-menu-list',
         anchor,
@@ -2674,8 +2985,51 @@ window.__ModuleLoader__.load({
           key: 'select',
           className: 'skb-select--platform',
           value: country,
+          align: 'end',
           options: COUNTRIES.map((item) => ({ id: item.code, label: countryName(item.code) })),
           ariaLabel: boundT('settings.country.label'),
+          onSelect: onChange,
+        }),
+      ]);
+    }
+
+    /** One additive row inside Settings → General: the calendar auto-refresh interval. */
+    function CalendarRefreshSettingRow(props) {
+      const { ctx } = props;
+      const t = ctx.locale.bind(NS);
+      const [refresh, setRefresh] = useState(() => readStoredSettings().refresh);
+      const [localeTick, setLocaleTick] = useState(0);
+      useEffect(() => {
+        const off = ctx.locale.subscribe(() => setLocaleTick((value) => value + 1));
+        return () => { if (typeof off === 'function') off(); };
+      }, [ctx]);
+      useEffect(() => {
+        const sync = () => setRefresh(readStoredSettings().refresh);
+        window.addEventListener(SETTINGS_EVENT, sync);
+        return () => window.removeEventListener(SETTINGS_EVENT, sync);
+      }, []);
+      void localeTick;
+      const boundT = (key, params) => fill(t(key), params);
+      const onChange = (next) => {
+        persistSettings({ refresh: next });
+        emitSettingsChanged();
+        setRefresh(next);
+      };
+      return h('div', { className: 'skb-settings-row' }, [
+        h('div', { key: 'text', className: 'skb-settings-text' }, [
+          h('span', { key: 'label', className: 'skb-settings-label' }, boundT('settings.refresh.label')),
+          h('span', { key: 'hint', className: 'skb-settings-hint' }, boundT('settings.refresh.hint')),
+        ]),
+        h(KanbanSelect, {
+          key: 'select',
+          className: 'skb-select--platform',
+          value: refresh,
+          align: 'end',
+          options: CALENDAR_REFRESH_OPTIONS.map((option) => ({
+            id: option.id,
+            label: boundT(`settings.refresh.${option.id}`),
+          })),
+          ariaLabel: boundT('settings.refresh.label'),
           onSelect: onChange,
         }),
       ]);
@@ -2723,6 +3077,14 @@ window.__ModuleLoader__.load({
         locale: NS,
         inject: () => ({ ctx }),
       }, CountrySettingRow));
+
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item',
+        id: 'session-kanban-refresh',
+        order: 26,
+        locale: NS,
+        inject: () => ({ ctx }),
+      }, CalendarRefreshSettingRow));
     }
 
     return { inject, apply };
