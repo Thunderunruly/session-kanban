@@ -1,0 +1,69 @@
+# 架构
+
+## Bundle 组成
+
+```
+client.js           # 客户端：侧栏入口、看板面板、设置行、样式
+index.js            # 宿主端：sessionKanban 会话投影
+cordis.patch.yml    # bundle patch，把插件行插入 profile
+package.json        # bundle 清单（dsh.bundle / dsh.client）
+locale/             # 面板标题与描述词典
+icon.svg            # 侧栏图标
+```
+
+## 宿主端（index.js）
+
+注册 `sessionKanban` 会话投影，把以下事件折叠成卡片所需的最小状态：
+
+- `user/message`、`assistant/message`
+- `turn/start`、`turn/end`
+- `todo/write`
+
+投影输出：
+
+```
+{ request, reply, turn, endKind, todos, done, inProgress, total }
+```
+
+这样客户端渲染卡片时不需要回放会话日志。
+
+## 客户端（client.js）
+
+注册：
+
+- `sidebar.panellist`：侧栏面板入口与图标；
+- `main`：看板主面板（`session-board` 页面）；
+- `settings.general.item`：工作日国家与自动更新两行设置。
+
+渲染基于宿主 UI primitives（`Button` / `Menu` / `Tooltip` / `Input` / `SegmentedTabs` 等），
+不引入额外 UI 依赖。
+
+## 数据流
+
+- **会话列表**：`ctx.sessions.list` 快照提供标题、运行状态、更新时间、父会话等基础字段。
+- **详情投影**：部分会话没有随列表提供投影值时，客户端用 `ctx.remote.session.projections`
+  增量拉取；按最近活动排序、串行执行，预算上限 200 条，避免大目录一次性请求过多。
+- **工作区**：`ctx.workspaces.list` 快照提供 `items`（含各工作区的 `sessionIds`）、
+  `archivedSessionIds`、`pinnedSessionIds`。
+- **本地偏好**：`localStorage`（见 [配置](Configuration)）。
+
+## 渲染
+
+- 瀑布流三列（随宽度调整），卡片按**自然高度**布局，不使用 `content-visibility` 占位；
+- 滚动接近底部自动分页（每页 60 条）；
+- Tab 只改变过滤条件，不改变数据源；概览统计、热力图与文件头计数都跟随当前过滤结果。
+
+## 会话关系与工作区继承
+
+- 子代理 / 团队成员 / 分叉会话通过宿主的 `parentSession` 关联父会话；
+- 客户端用父会话链解析关系与「家族强调色」（同一父会话及其子会话共享颜色）；
+- 工作区归属先取宿主 registry 的直接登记；没有直接登记的会话沿父链继承，保证工作区过滤不漏
+  子会话。循环/自指关系有保护，直接登记优先级最高。
+
+## 导航行为
+
+- 点击卡片打开会话：`ctx.uiWorkspace.openSession`；
+- 归档：调用 `ctx.workspaces.archiveSession`；若目标会话是主视图当前持有的会话，宿主会清空主
+  视图，插件在归档完成后通过 `ctx.get('layout').selectPanel(PANEL_ID)` 重新打开看板；
+- 分叉：`ctx.uiWorkspace.forkSession`，创建后自动打开子会话。
+

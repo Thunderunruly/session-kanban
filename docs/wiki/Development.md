@@ -1,0 +1,72 @@
+# 开发与测试
+
+## 目录
+
+```
+client.js           # 客户端（单文件 ESM bundle，无构建步骤）
+index.js            # 宿主端投影
+cordis.patch.yml    # bundle patch
+package.json        # bundle 清单
+locale/             # 面板标题/描述词典
+tests/              # 离线测试
+docs/               # 截图与 Wiki 源文件
+```
+
+## 离线测试
+
+不需要浏览器：
+
+```powershell
+cd tests
+pnpm install
+node fold-test.mjs      # 宿主投影折叠
+node render-test.mjs    # 客户端 SSR 渲染（zh + en、热力图、Tab、范围、分页、关系、工作区）
+```
+
+`react` / `react-dom` 仅用于 SSR 测试；浏览器 bundle 运行时使用宿主提供的 `react`。
+
+`render-test.mjs` 覆盖：
+
+- 面板、侧栏入口、设置行注册；
+- 概览统计与热力图（年/月/周/日、工作日高亮、数据源显示）；
+- Tab 分区语义（进行中 / 有待办 / 已完成覆盖全部）；
+- 搜索、团队范围、工作区过滤（含子会话继承工作区）；
+- 会话关系（子代理/团队成员/分叉、父会话链接、子会话计数、家族强调色）；
+- 子代理会话重命名禁用与悬停说明；
+- 归档可见性、分页与虚拟化行为。
+
+## 调试技巧
+
+- 客户端改动热加载；宿主端（`index.js` / `cordis.patch.yml`）改动需要重载窗口。
+- 重置看板偏好：
+
+```js
+Object.keys(localStorage)
+  .filter((key) => key.startsWith('dsh.session-kanban.'))
+  .forEach((key) => localStorage.removeItem(key));
+```
+
+- 若工作日日历异常，可在设置里切换国家或点击热力图侧栏刷新图标；必要时清掉
+  `dsh.session-kanban.calendar.v2` 重新拉取。
+
+## 发版流程（维护者）
+
+1. 更新 `client.js` / 文档并跑通离线测试；
+2. `npm version <patch|minor>` 更新版本号并提交；
+3. 打 tag 并推送到 GitHub：
+   ```sh
+   git tag vX.Y.Z
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+4. 发布 npm：`npm publish --access public`；
+5. 创建 GitHub Release（可用 `gh release create vX.Y.Z --title ... --notes ...`），
+   说明安装命令与变更摘要；
+6. 更新 [版本记录](Releases) 页面。
+
+## 贡献
+
+- 提交前请跑 `node fold-test.mjs` 与 `node render-test.mjs`；
+- UI 改动尽量复用宿主 primitives 与 token，避免自定义配色；
+- 新增设置行、快捷键或行为时同步更新 Wiki 与 README。
+

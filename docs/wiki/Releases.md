@@ -1,0 +1,30 @@
+# 版本记录
+
+每个版本的完整说明与源码压缩包见
+[GitHub Releases](https://github.com/Thunderunruly/session-kanban/releases)；
+npm 上的版本见 [npm package](https://www.npmjs.com/package/dsh-session-kanban)。
+
+| 版本 | 主要变化 |
+| --- | --- |
+| [v1.1.4](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.4) | 禁用操作的悬停说明（子代理无法重命名）；工作区过滤沿父会话链继承子会话 |
+| [v1.1.3](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.3) | 会话关系卡片（关系类型、父会话链接、子会话计数、家族强调色）；归档主视图会话后自动重开看板 |
+| [v1.1.2](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.2) | 工作区过滤；页头按钮改用宿主默认 md 样式；子代理会话禁用重命名；卡片高度裁切修复；热力图滚动条隐藏 |
+| [v1.1.1](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.1) | Tab 全量归类（进行中/有待办/已完成覆盖全部会话）；详情加载预算 80 → 200 |
+| [v1.1.0](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.0) | 多国工作日日历（中/日/韩/俄）；日历自动更新间隔；紧凑日历状态行；自适应下拉；原生悬停操作与页头按钮；归档会话从各 Tab 与统计中隐藏 |
+| [v1.0.0](https://www.npmjs.com/package/dsh-session-kanban/v/1.0.0) | 首个正式版本：侧栏看板、概览统计与热力图、卡片与快捷操作、Tab 与搜索 |
+
+## 安装指定版本
+
+```sh
+dsh plugin --profile web add dsh-session-kanban@1.1.4
+```
+
+## 升级
+
+```sh
+dsh plugin --profile web add dsh-session-kanban@latest
+```
+
+升级后重载 DSH 窗口。
+
+

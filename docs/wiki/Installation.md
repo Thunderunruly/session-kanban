@@ -1,0 +1,65 @@
+# 安装
+
+## 环境要求
+
+- **DeepSeek Harness（DSH）**，需要 Web UI 与插件支持。插件在 DSH `0.2.1-rc.3`（桌面端 profile）
+  上开发与验证。
+- 插件包是 ESM（`"type": "module"`），运行时直接复用宿主提供的 `react`，不额外打包依赖。
+- `node` + `pnpm` 只有在跑离线测试时才需要；普通使用不需要安装 Node。
+
+## 从 npm 安装
+
+```sh
+dsh plugin --profile web add dsh-session-kanban
+```
+
+安装完成后**重载一次 DSH 窗口**，让客户端 bundle 进入启动图。之后客户端改动会热加载，不需要
+反复重载。
+
+安装指定版本：
+
+```sh
+dsh plugin --profile web add dsh-session-kanban@1.1.4
+```
+
+升级到最新版：
+
+```sh
+dsh plugin --profile web add dsh-session-kanban@latest
+```
+
+## 从本地目录安装
+
+适合开发调试。在 DSH 插件管理器里执行：
+
+```
+install_bundle <本目录绝对路径>
+```
+
+或者把目录作为 `link:` 依赖加入 profile，由插件自带的 `cordis.patch.yml` 插入插件行：
+
+```json
+"dependencies": {
+  "dsh-session-kanban": "link:F:/path/to/session-kanban"
+}
+```
+
+安装后同样重载一次窗口。
+
+## 验证安装
+
+1. 左侧栏出现「会话看板」面板图标；
+2. 点击后主区域显示概览页（统计卡片 + 活跃热力图）；
+3. **设置 → 通用设置**中出现「工作日国家/地区」与「日历自动更新」两行。
+
+## 卸载
+
+从 profile 的 `dependencies` 中移除 `dsh-session-kanban` 并重载窗口；插件注册的入口、设置行与
+样式会一并消失。本地偏好（`localStorage` 中的 `dsh.session-kanban.*`）不会被自动清理。
+
+## 升级注意事项
+
+- 版本变化见 [版本记录](Releases)；
+- 升级后如果界面没有变化，先完整重载窗口（而不是只切换面板）；
+- 从 1.1.x 之前升级：旧的本地缓存/偏好键会自动兼容，无需手动清理。
+
