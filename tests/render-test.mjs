@@ -22,10 +22,10 @@ if (!moduleRecord || moduleRecord.id !== '@local/session-kanban-board') throw ne
 
 // Shell UI primitives are provided by the module system; render a minimal stand-in.
 const primitivesStub = {
-  Menu({ open, anchor, items, selectedId }) {
+  Menu({ open, anchor, items, selectedId, listClassName }) {
     return React.createElement(
       'div',
-      { className: 'mock-menu', 'data-open': open ? 'true' : 'false' },
+      { className: 'mock-menu', 'data-open': open ? 'true' : 'false', 'data-list-class': listClassName || '' },
       anchor,
       open
         ? React.createElement('div', { className: 'mock-menu-items' }, (items || []).map((item) => React.createElement('span', {
@@ -386,7 +386,7 @@ const settingsRegistration = overviewCtx.getRegistered().find((item) => item && 
 if (!settingsRegistration) throw new Error('settings.general.item registration missing');
 if (settingsRegistration.options.id !== 'session-kanban-country') throw new Error('settings row id mismatch');
 const settingsMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(settingsRegistration.component, { ctx: overviewCtx.ctx }));
-for (const needle of ['工作日国家/地区', 'skb-select', 'aria-haspopup="menu"', 'China']) {
+for (const needle of ['工作日国家/地区', 'skb-select', 'aria-haspopup="menu"', 'China', 'skb-menu-list']) {
   if (!settingsMarkup.includes(needle)) throw new Error(`settings row missing: ${needle}`);
 }
 console.log('settings row OK');

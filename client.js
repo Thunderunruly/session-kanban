@@ -1100,6 +1100,10 @@ window.__ModuleLoader__.load({
 .skb-select--block{width:100%;justify-content:space-between}
 .skb-select--scope{max-width:280px}
 .skb-select--platform{flex:none;white-space:nowrap}
+/* Long option lists (teams, countries, weeks) scroll inside a bounded menu instead of
+   stretching to the full viewport height; the shell's scrollable list already makes the
+   viewport scroll, this only caps the surface height. */
+.skb-menu-list{max-height:min(400px,calc(100vh - 120px))}
 .skb-date-input{width:100%;cursor:default;color-scheme:inherit}
 .skb-tabs{display:flex;gap:2px;padding:3px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);max-width:100%;overflow-x:auto}
 .skb-tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;line-height:1;cursor:pointer;white-space:nowrap;flex:none}
@@ -2631,6 +2635,7 @@ window.__ModuleLoader__.load({
         },
         align: props.align || 'start',
         portal: true,
+        listClassName: 'skb-menu-list',
         anchor,
       });
     }
