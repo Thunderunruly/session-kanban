@@ -1,0 +1,14 @@
+{
+  "name": "@local/session-kanban-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline verification for the session-kanban DSH plugin bundle.",
+  "scripts": {
+    "test": "node fold-test.mjs && node render-test.mjs"
+  },
+  "devDependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}

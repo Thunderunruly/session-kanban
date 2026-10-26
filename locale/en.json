@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Board",
+    "description": "A left-sidebar board listing every chat session with its current work, todo list, and progress. Click a card to jump straight to that session."
+  }
+}
