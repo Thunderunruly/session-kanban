@@ -9,6 +9,7 @@ versions are listed on the
 
 | Version | Highlights |
 | --- | --- |
+| [v1.1.5](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.5) | Forked sessions are treated as independent top-level sessions (no parent relation, no child-session count and no "parent session not visible"); archived parents of real child sessions keep their title with an "archived" marker |
 | [v1.1.4](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.4) | Hover explanation for disabled actions (subagent rename); workspace filter inherits child sessions through the parent chain |
 | [v1.1.3](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.3) | Session relationship cards (relation kind, parent link, child count, family accent); board reopens after archiving the main-view session |
 | [v1.1.2](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.2) | Workspace filter; host default `md` header buttons; disabled rename for subagent sessions; clipped last cards fixed; stray heatmap scrollbar hidden |
@@ -29,3 +30,4 @@ dsh plugin --profile web add dsh-session-kanban@latest
 ```
 
 Reload the DSH window after upgrading.
+
