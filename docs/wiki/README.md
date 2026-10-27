@@ -28,3 +28,9 @@ GitHub 没有创建 Wiki 首页的 API/CLI：仓库 Wiki 必须先由有写权�
 3. 提交并推送。
 
 可用 `-Message "..."` 自定义提交信息。发布前建议先执行仓库测试。
+
+如果直连 `github.com` 被重置/超时而本机有本地代理，使用 `-Proxy`：
+
+```powershell
+./publish.ps1 -Proxy http://127.0.0.1:7897
+```

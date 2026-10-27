@@ -15,22 +15,30 @@ the GitHub web UI: https://github.com/Thunderunruly/session-kanban/wiki
 .PARAMETER Message
 Commit message for the wiki update.
 
+.PARAMETER Proxy
+Optional HTTP proxy for git, e.g. http://127.0.0.1:7897. Useful when direct
+connections to github.com are blocked but a local proxy is available.
+
 .EXAMPLE
 ./publish.ps1
 ./publish.ps1 -Message "docs: update usage page"
+./publish.ps1 -Proxy http://127.0.0.1:7897
 #>
 [CmdletBinding()]
 param(
-  [string]$Message = 'Update wiki from docs/wiki'
+  [string]$Message = 'Update wiki from docs/wiki',
+  [string]$Proxy = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $wikiUrl = 'https://github.com/Thunderunruly/session-kanban.wiki.git'
 $source = $PSScriptRoot
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ('skb-wiki-' + [guid]::NewGuid().ToString('N'))
+$gitProxy = @()
+if ($Proxy) { $gitProxy = @('-c', "http.proxy=$Proxy", '-c', "https.proxy=$Proxy") }
 
 Write-Host "Cloning $wikiUrl ..."
-git clone --depth 1 $wikiUrl $temp
+git @gitProxy clone --depth 1 $wikiUrl $temp
 if ($LASTEXITCODE -ne 0) {
   Write-Error @'
 Could not clone the wiki repository. Create the first wiki page in the browser
@@ -59,7 +67,7 @@ try {
       return
     }
     git commit -m $Message
-    git push origin HEAD
+    git @gitProxy push origin HEAD
     if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
     Write-Host 'Wiki published.'
   } finally {
