@@ -25,8 +25,13 @@ fully reload the window.
 
 ## A child card says “Parent session not visible”
 
-The parent session is archived or not part of the visible catalog. The title is not
-clickable in that case, to avoid a failed navigation.
+This now only appears when the parent session data is genuinely missing (deleted or not in
+the session list).
+
+An **archived** parent is shown with its title and an “archived” marker instead of “not
+visible”. **Forked sessions are independent top-level sessions** (the source is only fork
+provenance), so they render no parent relation at all — neither this hint nor a link to an
+archived fork source.
 
 ## A subagent session cannot be renamed
 

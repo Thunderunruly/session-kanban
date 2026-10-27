@@ -62,10 +62,13 @@ Rendering is based on host UI primitives (`Button` / `Menu` / `Tooltip` / `Input
 
 ## Relationships and workspace inheritance
 
-- Subagent, team member and fork sessions link to their parent through the host's
-  `parentSession`.
+- Only **subagent** and **team member** sessions render a parent relation from the host's
+  `parentSession`; **forks are independent top-level sessions**, so fork provenance is not
+  rendered as a parent relation and does not count as a child.
 - The client resolves relations and a per-family accent colour along the parent chain; a
   parent and all of its children share one colour.
+- An archived parent resolves its title from the full session registry and gets an “archived”
+  marker; only a genuinely missing parent shows “parent session not visible”.
 - Workspace membership prefers the host registry's direct accounting; sessions without a
   direct entry inherit their parent's workspace, so the workspace filter never hides child
   sessions. Cycles are guarded and direct accounting wins.

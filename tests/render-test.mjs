@@ -243,6 +243,9 @@ const snapshot = {
       id: 's-alldone',
       title: '已全部完成',
       running: false,
+      // Fork provenance: forked sessions carry the source session in parentSession,
+      // but are independent top-level sessions and must not render as children.
+      parentId: 's-gone',
       updatedAt: now - 2 * 60 * 60 * 1000,
       cwd: 'F:\\GitLab\\done',
       projectionValues: {
@@ -396,6 +399,10 @@ if (!zhMarkup.includes('aria-label="置顶会话"')) throw new Error('pin action
 if (!zhMarkup.includes('skb-relation')) throw new Error('session relation row missing');
 if (!zhMarkup.includes('>子代理<')) throw new Error('subagent relation label missing');
 if (!zhMarkup.includes('1 个子会话')) throw new Error('parent child count missing');
+// Fork provenance is not a parent relation: only the two real relations render.
+if ((zhMarkup.match(/class="skb-relation"/g) || []).length !== 2) {
+  throw new Error('fork provenance rendered as a parent relation');
+}
 // Family colour: cards carry an inline accent and the relation row shows a dot.
 if (!/style="border-left-color:hsl\(\d+, \d+%, \d+%\)"/.test(zhMarkup)) {
   throw new Error('session family accent missing');
@@ -481,8 +488,12 @@ const archivedWorkspace = { pinnedSessionIds: [], archivedSessionIds: ['s-idle']
 const archivedCtx = makeContext(snapshot, 'zh', archivedWorkspace);
 client.apply(archivedCtx.ctx);
 const archivedMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(archivedCtx.getRegistered()[0].component, { ctx: archivedCtx.ctx }));
-if (archivedMarkup.includes('修复 BLE 断连')) throw new Error('archived session still rendered on the board');
+if (archivedMarkup.includes('aria-label="修复 BLE 断连"')) throw new Error('archived session still rendered on the board');
 if (!archivedMarkup.includes('实现左侧栏会话看板')) throw new Error('archiving removed an unrelated session');
+// A subagent child whose parent is archived keeps the parent title plus a marker
+// instead of the misleading "parent session not visible".
+if (!archivedMarkup.includes('skb-relation-archived-tag')) throw new Error('archived parent is not labelled');
+if (!archivedMarkup.includes('>已归档<')) throw new Error('archived parent marker text missing');
 globalThis.window.localStorage = makeStorage([['dsh.session-kanban.filter.v2', 'overview']]);
 const archivedOverviewCtx = makeContext(snapshot, 'zh', archivedWorkspace);
 client.apply(archivedOverviewCtx.ctx);

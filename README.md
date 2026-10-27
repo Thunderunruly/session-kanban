@@ -55,11 +55,14 @@ _Overview page._
   partition every visible session: Completed is the catch-all for sessions with no
   unfinished todos (fully done, no todo list, or details not loaded yet), so nothing is
   left only in All.
-- **Session relationships** — child sessions (subagent, team member or fork) show a compact
-  row naming the relation and linking to their parent; parent cards count the child
-  sessions visible in the current view. One family shares one accent colour (parent and
-  children have the same tinted left edge and relation dots), so scattered masonry cards
-  can be matched to their parent regardless of order.
+- **Session relationships** — subagent and team-member child sessions show a compact row
+  naming the relation and linking to their parent; parent cards count the child sessions
+  visible in the current view. One family shares one accent colour (parent and children have
+  the same tinted left edge and relation dots), so scattered masonry cards can be matched to
+  their parent regardless of order. Forked sessions are independent top-level sessions (the
+  source is only fork provenance), so they are neither shown as children nor counted; an
+  archived parent keeps its title with an “archived” marker instead of a dead “not visible”
+  link.
 - **Filters** — the Agent Team scope (when teams exist) and a Workspace filter (defaults
   to **All workspaces**, hidden when the host has only one Workspace, persisted across
   reloads) combine with the tabs and search. Sessions the host does not account to a

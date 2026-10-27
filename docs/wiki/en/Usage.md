@@ -51,9 +51,11 @@ current work, latest reply, task text and the working directory. Clear it to res
 
 - Status dot (running / idle) and relative update time.
 - Title (inline rename described below).
-- Session relationships: child cards show `↳ kind · parent title`, parent cards show
-  `↳ N child sessions`; one family shares the same accent colour on the left edge and dots,
-  and the parent title is clickable.
+- Session relationships: **subagent and team-member** child cards show `↳ kind · parent title`,
+  parent cards show `↳ N child sessions`; one family shares the same accent colour on the left
+  edge and dots, and the parent title is clickable. **Forked sessions are independent top-level**
+  **sessions** (the source is only fork provenance), so they show no parent relation and are not
+  counted as children; an archived parent keeps its title with an “archived” marker.
 - Current work (running) or latest result (idle), plus the most recent request.
 - Todo progress bar and list (up to four items, the rest collapsed).
 - Working directory basename and hover actions.

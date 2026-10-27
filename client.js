@@ -607,8 +607,8 @@ window.__ModuleLoader__.load({
       'meta.untitled': '未命名会话',
       'relation.subagent': '子代理',
       'relation.teamMember': '团队成员',
-      'relation.fork': '分叉自',
       'relation.parentMissing': '父会话不可见',
+      'relation.parentArchived': '已归档',
       'relation.children': '{n} 个子会话',
       'meta.pinned': '已置顶',
       'rename.label': '会话标题',
@@ -739,8 +739,8 @@ window.__ModuleLoader__.load({
       'meta.untitled': 'Untitled session',
       'relation.subagent': 'Subagent',
       'relation.teamMember': 'Team member',
-      'relation.fork': 'Forked from',
       'relation.parentMissing': 'Parent session not visible',
+      'relation.parentArchived': 'archived',
       'relation.children': '{n} child sessions',
       'meta.pinned': 'Pinned',
       'rename.label': 'Session title',
@@ -1518,6 +1518,9 @@ window.__ModuleLoader__.load({
 .skb-relation-link:hover{text-decoration:underline}
 .skb-relation-link:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px;border-radius:4px}
 .skb-relation-missing{opacity:.85}
+.skb-relation-archived{display:flex;align-items:center;gap:5px;min-width:0;max-width:100%}
+.skb-relation-archived-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skb-relation-archived-tag{flex:none;padding:0 5px;border-radius:999px;background:var(--dsw-alias-bg-module-platform);font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)}
 .skb-relation-children{display:flex;align-items:center;gap:5px;flex:none}
 .skb-relation-sep{margin:0 2px;opacity:.6}
 .skb-label{font-size:11px;line-height:16px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
@@ -1802,49 +1805,71 @@ window.__ModuleLoader__.load({
         return workspaceRows.filter((row) => teamInfo.memberOf.get(row.sessionId) === scope);
       }, [workspaceRows, scope, teamInfo]);
 
-      // Parent / child relations inside the current view. Subagent-owned sessions,
-      // Agent Team members and forks all carry a parentSession; the card labels which
-      // one it is and links to the parent, while parents show their visible child count.
+      // Parent / child relations inside the current view. Only subagent-owned
+      // sessions and Agent Team members are true children of their parentSession;
+      // forks are independent top-level Sessions that merely record their source,
+      // so they are not rendered as children (and do not count as children).
       const relations = useMemo(() => {
         const byId = new Map(rows.map((row) => [row.sessionId, row]));
+        const rawById = (sessionSnapshot && sessionSnapshot.byId) || {};
+        const titleOf = (entry) => {
+          if (!entry) return '';
+          if (typeof entry.title === 'string' && entry.title) return entry.title;
+          if (typeof entry.displayTitle === 'string' && entry.displayTitle && entry.displayTitle !== entry.id) {
+            return entry.displayTitle;
+          }
+          return '';
+        };
+        const realChild = (row) => {
+          if (!row || !row.parentId) return false;
+          if (teamInfo.memberOf.get(row.sessionId) === row.parentId) return true;
+          return row.origin === 'subagent';
+        };
         const childCount = new Map();
         for (const row of scopedRows) {
-          if (!row.parentId) continue;
+          if (!realChild(row)) continue;
           childCount.set(row.parentId, (childCount.get(row.parentId) || 0) + 1);
         }
         const map = new Map();
         for (const row of scopedRows) {
-          const parentId = row.parentId || '';
           const children = childCount.get(row.sessionId) || 0;
           // A parent and its children share one hue: the child border/dot uses the
           // parent's accent, the parent card uses its own accent for its child count.
           const childAccent = children > 0 ? relationshipAccent(row.sessionId) : '';
-          if (!parentId) {
+          if (!realChild(row)) {
             map.set(row.sessionId, {
               parentId: '',
               kindKey: '',
               parentTitle: '',
+              parentVisible: false,
+              parentArchived: false,
               childCount: children,
               accent: childAccent,
               childAccent,
             });
             continue;
           }
-          const parent = byId.get(parentId);
-          let kindKey = 'relation.fork';
-          if (teamInfo.memberOf.get(row.sessionId) === parentId) kindKey = 'relation.teamMember';
-          else if (row.origin === 'subagent') kindKey = 'relation.subagent';
+          const parentId = row.parentId;
+          const visibleParent = byId.get(parentId);
+          const rawParent = rawById[parentId];
+          const kindKey = teamInfo.memberOf.get(row.sessionId) === parentId
+            ? 'relation.teamMember'
+            : 'relation.subagent';
           map.set(row.sessionId, {
             parentId,
             kindKey,
-            parentTitle: parent ? (parent.title || boundT('meta.untitled')) : '',
+            // Archived parents keep their title (resolved from the full session
+            // registry) plus an "archived" marker instead of a dead "not visible".
+            parentTitle: visibleParent ? (visibleParent.title || boundT('meta.untitled')) : titleOf(rawParent),
+            parentVisible: !!visibleParent,
+            parentArchived: !visibleParent && !!rawParent,
             childCount: children,
             accent: relationshipAccent(parentId),
             childAccent,
           });
         }
         return map;
-      }, [rows, scopedRows, teamInfo, boundT]);
+      }, [rows, scopedRows, teamInfo, boundT, sessionSnapshot]);
 
       // Search applies to every tab, including the overview (which then aggregates only
       // the matching sessions). An empty query keeps the whole scoped catalog.
@@ -2853,16 +2878,21 @@ window.__ModuleLoader__.load({
                   }),
                   h('span', { key: 'kind', className: 'skb-relation-kind' }, boundT(relation.kindKey)),
                   relation.parentTitle
-                    ? h('button', {
-                      key: 'link',
-                      type: 'button',
-                      className: 'skb-relation-link',
-                      title: relation.parentTitle,
-                      onClick: (event) => {
-                        event.stopPropagation();
-                        openSession(relation.parentId);
-                      },
-                    }, relation.parentTitle)
+                    ? (relation.parentVisible
+                      ? h('button', {
+                        key: 'link',
+                        type: 'button',
+                        className: 'skb-relation-link',
+                        title: relation.parentTitle,
+                        onClick: (event) => {
+                          event.stopPropagation();
+                          openSession(relation.parentId);
+                        },
+                      }, relation.parentTitle)
+                      : h('span', { key: 'archived', className: 'skb-relation-archived' }, [
+                        h('span', { key: 'title', className: 'skb-relation-archived-title' }, relation.parentTitle),
+                        h('span', { key: 'tag', className: 'skb-relation-archived-tag' }, boundT('relation.parentArchived')),
+                      ]))
                     : h('span', { key: 'missing', className: 'skb-relation-missing' }, boundT('relation.parentMissing')),
                 ])
                 : null,
