@@ -64,8 +64,9 @@ _概览页。_
 
 ## 环境要求
 
-- **DeepSeek Harness（DSH）**，需支持 Web UI 与插件（开发与验证基于 DSH `0.2.1-rc.3`
-  桌面端 profile）。
+- **DeepSeek Harness（DSH）** `>=0.2.1-rc.3 <0.3.0-0`，需支持 Web UI 与插件。版本范围以
+  `package.json` 的 `engines.dsh` 声明，插件市场会据此显示宿主要求；开发与验证覆盖
+  DSH `0.2.1-rc.3`–`0.2.1-rc.5`（桌面端 profile）。
 - 插件包为 ESM（`"type": "module"`），运行时直接复用宿主提供的 `react`，不打包额外依赖。
 - `node` + `pnpm` 仅离线测试需要。
 
@@ -176,10 +177,11 @@ node render-test.mjs    # 客户端 SSR 渲染（zh + en、热力图、tab、范
 client.js           # 客户端：侧栏入口、看板面板、设置行
 index.js            # 宿主端：sessionKanban 投影
 cordis.patch.yml    # 插入插件行的 bundle patch
-package.json        # bundle 清单（dsh.bundle / dsh.client）
+package.json        # bundle 清单（dsh.bundle / dsh.client / engines.dsh）
+screenshots.json    # 插件市场预览图（1-8 个仓库内相对路径）
 locale/             # 面板标题与描述词典
 icon.svg            # 侧栏图标
-docs/screenshots/   # README 截图
+docs/screenshots/   # README 与插件市场共用的截图
 tests/              # 离线折叠 / SSR 测试
 ```
 

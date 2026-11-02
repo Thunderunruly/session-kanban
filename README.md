@@ -79,8 +79,9 @@ _Overview page._
 
 ## Requirements
 
-- **DeepSeek Harness (DSH)** with the Web UI and plugin support (developed and tested
-  against DSH `0.2.1-rc.3`, desktop profile).
+- **DeepSeek Harness (DSH)** `>=0.2.1-rc.3 <0.3.0-0` with the Web UI and plugin support.
+  The range is declared as `engines.dsh` in `package.json` and shown by the DSH plugin
+  market; development and testing ran on DSH `0.2.1-rc.3`–`0.2.1-rc.5` (desktop profile).
 - The package is ESM (`"type": "module"`) and loads `react` from the running DSH host, so
   no runtime dependency is bundled.
 - `node` + `pnpm` are only needed for the offline tests.
@@ -200,10 +201,11 @@ as a single-file module bundle.
 client.js           # browser half: sidebar entry, board panel, settings rows
 index.js            # host half: sessionKanban projection
 cordis.patch.yml    # bundle patch inserting the plugin row
-package.json        # bundle manifest (dsh.bundle / dsh.client)
+package.json        # bundle manifest (dsh.bundle / dsh.client / engines.dsh)
+screenshots.json    # plugin-market preview images (1-8 repo-relative paths)
 locale/             # panel title and description dictionaries
 icon.svg            # sidebar icon
-docs/screenshots/   # README screenshots
+docs/screenshots/   # screenshots for the READMEs and the plugin market
 tests/              # offline fold / SSR tests
 ```
 

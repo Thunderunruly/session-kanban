@@ -4,8 +4,9 @@
 
 ## Requirements
 
-- **DeepSeek Harness (DSH)** with the Web UI and plugin support. Developed and verified
-  against DSH `0.2.1-rc.3` (desktop profile).
+- **DeepSeek Harness (DSH)** with the Web UI and plugin support. `package.json` declares
+  `engines.dsh` as `>=0.2.1-rc.3 <0.3.0-0` (the DSH plugin market shows that requirement);
+  development and verification ran on DSH `0.2.1-rc.3`–`0.2.1-rc.5` (desktop profile).
 - The package is ESM (`"type": "module"`) and reuses the host-provided `react` at runtime;
   no extra runtime dependency is bundled.
 - `node` + `pnpm` are only needed for the offline tests, not for normal use.

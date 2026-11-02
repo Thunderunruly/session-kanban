@@ -8,10 +8,11 @@
 client.js           # client half (single-file ESM bundle, no build step)
 index.js            # host projection
 cordis.patch.yml    # bundle patch
-package.json        # bundle manifest
+package.json        # bundle manifest (dsh.bundle / dsh.client / engines.dsh)
+screenshots.json    # plugin-market preview images (repo-relative paths)
 locale/             # panel title/description dictionaries
 tests/              # offline tests
-docs/               # screenshots and wiki sources
+docs/               # README/market screenshots and wiki sources
 ```
 
 ## Offline tests

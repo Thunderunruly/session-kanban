@@ -5,6 +5,9 @@
   "description": "Session kanban board for DeepSeek Harness: every chat session's current work, todos, and progress in the left sidebar, with a searchable overview heatmap and one click to jump back.",
   "license": "MIT",
   "author": "Thunderunruly",
+  "engines": {
+    "dsh": ">=0.2.1-rc.3 <0.3.0-0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Thunderunruly/session-kanban.git"
@@ -36,6 +39,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "screenshots.json",
     "README.md",
     "LICENSE"
   ],
