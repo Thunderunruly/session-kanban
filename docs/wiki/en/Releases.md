@@ -9,6 +9,7 @@ versions are listed on the
 
 | Version | Highlights |
 | --- | --- |
+| [v1.1.6](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.6) | Plugin-market metadata completed: the host requirement is declared via `engines.dsh` (`>=0.2.1-rc.3 <0.3.0-0`), so the market no longer reports it as undeclared; a new `screenshots.json` gives market cards their preview strip |
 | [v1.1.5](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.5) | Forked sessions are treated as independent top-level sessions (no parent relation, no child-session count and no "parent session not visible"); archived parents of real child sessions keep their title with an "archived" marker |
 | [v1.1.4](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.4) | Hover explanation for disabled actions (subagent rename); workspace filter inherits child sessions through the parent chain |
 | [v1.1.3](https://github.com/Thunderunruly/session-kanban/releases/tag/v1.1.3) | Session relationship cards (relation kind, parent link, child count, family accent); board reopens after archiving the main-view session |
