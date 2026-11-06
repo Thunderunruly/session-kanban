@@ -1382,7 +1382,15 @@ window.__ModuleLoader__.load({
    (the class is doubled so it outranks the primitive's viewport-based max-height). */
 .skb-menu-list.skb-menu-list{max-height:var(--skb-menu-max-height,320px)}
 .skb-date-input{width:100%;cursor:default;color-scheme:inherit}
-.skb-search-field{width:236px;max-width:100%}
+/* The toolbar stays one wrapping row; the search field is the item that gives
+   way, so the row only breaks when even a floor-width search no longer fits.
+   Sized from that floor and grown up to its full 236px, it absorbs width
+   changes inside the row instead of flipping the whole toolbar between one and
+   two rows at the exact width where the full-width search would just fit — a
+   slightly narrower panel (a page scrollbar appearing) or a bolded active tab
+   label was enough to do that. 180px is the smallest width that still shows the
+   whole search placeholder. */
+.skb-search-field{flex:1 1 180px;min-width:180px;max-width:236px}
 .skb-overview{display:flex;flex-direction:column;gap:14px;min-width:0}
 .skb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .skb-stat{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
