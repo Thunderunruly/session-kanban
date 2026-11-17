@@ -46,10 +46,12 @@ _Overview page._
 - **Session cards** — current request and latest reply, todo progress bar, updated time,
   working directory, running state; click a card (or press Enter/Space) to open the session.
 - **Quick actions** — pin / unpin, inline rename, fork, copy Session ID, archive (with
-  confirmation), refresh and new session. Sessions owned by subagent routing cannot be
-  renamed: the action is disabled and hovering it explains why. Archiving the Session
-  currently held by the main view reopens the board afterwards instead of leaving the user
-  on the new-session home.
+  confirmation), refresh and new session. When the latest request step failed and the host
+  still reports it as resumable, the card shows **Continue** under its latest result: it
+  resumes that step without opening the session (DSH `0.2.2-rc.2` and newer; older hosts
+  hide it). Sessions owned by subagent routing cannot be renamed: the action is disabled
+  and hovering it explains why. Archiving the Session currently held by the main view
+  reopens the board afterwards instead of leaving the user on the new-session home.
 - **Tabs and search** — Overview / All / Running / With-todos / Completed, plus a search
   box that filters both the board and the overview aggregates. The three content tabs
   partition every visible session: Completed is the catch-all for sessions with no
@@ -81,7 +83,9 @@ _Overview page._
 
 - **DeepSeek Harness (DSH)** `>=0.2.1-rc.3 <0.3.0-0` with the Web UI and plugin support.
   The range is declared as `engines.dsh` in `package.json` and shown by the DSH plugin
-  market; development and testing ran on DSH `0.2.1-rc.3`–`0.2.1-rc.5` (desktop profile).
+  market; development and testing ran on DSH `0.2.1-rc.3`–`0.2.2-rc.3` (desktop profile).
+  “Continue” needs the session projection added in DSH `0.2.2-rc.2`; older hosts simply
+  hide that button and every other feature keeps working.
 - The package is ESM (`"type": "module"`) and loads `react` from the running DSH host, so
   no runtime dependency is bundled.
 - `node` + `pnpm` are only needed for the offline tests.
@@ -125,7 +129,8 @@ Reload the window once after installation.
 3. Switch to **All** for the masonry card list; each card shows the session's current work,
    latest reply, todo list, working directory and updated time.
 4. **Click** a card to jump back into that session. Hover the card footer for pin, rename,
-   fork, copy Session ID and archive actions.
+   fork, copy Session ID and archive actions; a session whose last request failed shows a
+   **Continue** button under its latest result.
 5. Narrow the list with the tab filters, the Agent Team scope, the Workspace filter and the
    search box — all filters combine.
 6. The heatmap sidebar keeps a compact status row: refresh icon · country · last refresh
@@ -155,6 +160,10 @@ Two halves ship in one bundle:
 - **`client.js`** — client half. Registers the sidebar entry (`sidebar.panellist`), the
   board panel (`main`) and the General-settings rows (`settings.general.item`), then
   renders the board with React based on the host `Menu` / `Tooltip` / `Button` primitives.
+  Cards also read the host `conversationContinuation` session projection — the seq of a
+  failed request step that can still be resumed — and show **Continue**, which retains the
+  session with `ctx.sessions.using` and sends the empty continuation prompt
+  (`session.prompt([], 'queue')`).
 - **`cordis.patch.yml`** — bundle patch that inserts the plugin row into the profile.
 
 ## Workday calendar data sources

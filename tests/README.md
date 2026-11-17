@@ -10,7 +10,9 @@ Two Node scripts check the plugin without a browser:
 - `render-test.mjs` — runs `client.js` through a stubbed `__ModuleLoader__`, captures
   the slot registrations from `apply`, and server-renders the board in zh and en with a
   synthetic session store. It asserts the panel header, cards, current-work text, todo
-  progress bar, action buttons, localized sidebar label, and icon markup.
+  progress bar, action buttons, the Continue action that appears only for a session the
+  host reports as resumable, the card theme-token fallback, localized sidebar label, and
+  icon markup.
 
 ## Run
 

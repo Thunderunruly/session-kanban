@@ -23,6 +23,12 @@ window.__ModuleLoader__.load({
     const NS = 'session.kanban';
     const PANEL_ID = 'session-kanban';
     const PROJECTION_KEY = 'sessionKanban';
+    // Session-controller projection carrying the seq of the resumable failed request
+    // step (null when the Session cannot be continued). Only DSH releases that ship
+    // manual continuation register this unit, so its presence gates the card action.
+    const CONTINUATION_KEY = 'conversationContinuation';
+    // Reference source label for the retained Session used by the continuation action.
+    const CONTINUE_SOURCE = 'dsh-session-kanban';
     const TODOS_SHOWN = 4;
     const REFRESH_CONCURRENCY = 3;
     const FILTERS = ['overview', 'all', 'running', 'todos', 'done'];
@@ -518,6 +524,7 @@ window.__ModuleLoader__.load({
       'action.archive': '归档会话',
       'action.archiveConfirm': '确认归档',
       'action.archiveCancel': '取消',
+      'action.continue': '继续生成',
       'search.placeholder': '搜索标题、任务或目录',
       'action.loadMore': '加载更多',
       'list.loaded': '已显示 {shown}/{total} 个会话',
@@ -628,6 +635,10 @@ window.__ModuleLoader__.load({
       'state.noMatchHint': '换个关键词，或清空搜索查看全部会话。',
       'state.retry': '重试',
       'archive.failed': '归档失败：{message}',
+      'continue.failed': '继续生成失败：{message}',
+      'continue.unavailable': '当前 DSH 版本不支持继续生成',
+      'continue.rejected': '宿主拒绝了继续生成请求',
+      'continue.started': '已请求继续生成',
       'time.justNow': '刚刚',
       'time.minutes': '{n} 分钟前',
       'time.hours': '{n} 小时前',
@@ -650,6 +661,7 @@ window.__ModuleLoader__.load({
       'action.archive': 'Archive session',
       'action.archiveConfirm': 'Confirm archive',
       'action.archiveCancel': 'Cancel',
+      'action.continue': 'Continue',
       'search.placeholder': 'Search title, task, or folder',
       'action.loadMore': 'Load more',
       'list.loaded': 'Showing {shown}/{total} sessions',
@@ -760,6 +772,10 @@ window.__ModuleLoader__.load({
       'state.noMatchHint': 'Try another keyword, or clear the search to see all sessions.',
       'state.retry': 'Retry',
       'archive.failed': 'Could not archive: {message}',
+      'continue.failed': 'Could not continue: {message}',
+      'continue.unavailable': 'This DSH version does not support continuing a failed turn',
+      'continue.rejected': 'The host rejected the continuation request',
+      'continue.started': 'Continuation requested',
       'time.justNow': 'just now',
       'time.minutes': '{n}m ago',
       'time.hours': '{n}h ago',
@@ -1073,6 +1089,47 @@ window.__ModuleLoader__.load({
       return work && typeof work === 'object' ? work : null;
     }
 
+    /**
+     * Resolve the host's manual-continuation offer for one Session.
+     *
+     * Session summaries carry every client-visible projection, so the list hint is
+     * the live source once the host registers the unit; the exact projection read is
+     * only a fallback for Sessions whose hints predate the projection. A present but
+     * null hint is authoritative — the failed step is no longer resumable.
+     */
+    function continuationOf(entry, overlayValues) {
+      const hinted = entry && entry.projectionValues;
+      if (hinted && typeof hinted === 'object'
+        && Object.prototype.hasOwnProperty.call(hinted, CONTINUATION_KEY)) {
+        const value = hinted[CONTINUATION_KEY];
+        return typeof value === 'number' && Number.isFinite(value) ? value : null;
+      }
+      const read = overlayValues && overlayValues[CONTINUATION_KEY];
+      return typeof read === 'number' && Number.isFinite(read) ? read : null;
+    }
+
+    /**
+     * Whether the host holds admitted human input that still has to run.
+     *
+     * The continuation projection keeps reporting the failed step until the next
+     * `turn/start`, so a queued human message would otherwise offer an action the
+     * host must reject. The chat composer suppresses its own Continue button under
+     * the same condition; the `inbox` projection is a session summary key, so the
+     * answer travels with the row.
+     */
+    function hasPendingHumanInput(entry) {
+      const inbox = entry && entry.projectionValues && entry.projectionValues.inbox;
+      if (!inbox || typeof inbox !== 'object') return false;
+      for (const list of [inbox['next-step'], inbox['next-turn']]) {
+        if (!Array.isArray(list)) continue;
+        for (const item of list) {
+          const source = item && item.source;
+          if (source && typeof source === 'object' && source.kind === 'user') return true;
+        }
+      }
+      return false;
+    }
+
     function buildRow(entry, t, overlayValues, pinned) {
       const work = projectionOf(entry)
         || (overlayValues && overlayValues[PROJECTION_KEY] && typeof overlayValues[PROJECTION_KEY] === 'object'
@@ -1089,6 +1146,13 @@ window.__ModuleLoader__.load({
       const reply = work && typeof work.reply === 'string' ? work.reply : '';
       const turn = work && Number.isFinite(Number(work.turn)) ? Number(work.turn) : 0;
       const endKind = work && typeof work.endKind === 'string' ? work.endKind : '';
+      // Manual continuation is a host capability, not a local guess: the card only
+      // offers it while the host still reports the failed step as resumable. Subagent
+      // sessions are excluded like the chat composer does — their prompt route is not
+      // the ordinary empty-continuation admission — and queued human input blocks it.
+      const canContinue = !running && entry.origin !== 'subagent'
+        && !hasPendingHumanInput(entry)
+        && continuationOf(entry, overlayValues) != null;
       const currentWork = running
         ? (inProgress && inProgress.content ? inProgress.content : request)
         : (reply || request);
@@ -1130,6 +1194,7 @@ window.__ModuleLoader__.load({
         reply,
         turn,
         endKind,
+        canContinue,
         currentWork,
         hasDetails: work != null,
         canRename: entry.origin !== 'subagent',
@@ -1393,11 +1458,11 @@ window.__ModuleLoader__.load({
 .skb-search-field{flex:1 1 180px;min-width:180px;max-width:236px}
 .skb-overview{display:flex;flex-direction:column;gap:14px;min-width:0}
 .skb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.skb-stat{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
+.skb-stat{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-card-fill,var(--dsw-alias-bg-layer-1))}
 .skb-stat-label{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
 .skb-stat-value{font-size:24px;line-height:30px;font-weight:600;font-variant-numeric:tabular-nums}
 .skb-stat-sub{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.skb-panel{display:flex;flex-direction:column;gap:14px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
+.skb-panel{display:flex;flex-direction:column;gap:14px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-card-fill,var(--dsw-alias-bg-layer-1))}
 .skb-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .skb-panel-title{display:flex;flex-direction:column;gap:2px;min-width:0}
 .skb-panel-title strong{font-size:14px;line-height:20px;font-weight:600}
@@ -1497,8 +1562,8 @@ window.__ModuleLoader__.load({
 .skb-more{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:10px 0}
 .skb-more-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .skb-more-hint{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);opacity:.8}
-.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .15s,box-shadow .15s;box-sizing:border-box}
-.skb-card:hover{border-color:var(--dsw-alias-border-l2);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.skb-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-card-fill,var(--dsw-alias-bg-layer-1));cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;box-sizing:border-box}
+.skb-card:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-card-fill-hover,var(--dsw-alias-bg-layer-1));box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .skb-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .skb-card.is-running{border-color:var(--dsw-alias-state-success-primary)}
 .skb-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1535,6 +1600,13 @@ window.__ModuleLoader__.load({
 .skb-work{display:flex;flex-direction:column;gap:4px;min-width:0}
 .skb-work-text{margin:0;font-size:13px;line-height:19px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .skb-work-sub{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;word-break:break-word}
+/* Inline continuation action for a session whose last request step failed and is
+   still resumable on the host. Left-aligned inside the work section so it reads as
+   part of the result, not as a card-level toolbar action. */
+.skb-continue{align-self:flex-start;margin-top:2px;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:22px;cursor:pointer;flex:none;transition:background .15s,border-color .15s}
+.skb-continue:hover{background:var(--dsw-alias-interactive-bg-hover,transparent);border-color:var(--dsw-alias-border-l2)}
+.skb-continue:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px}
+.skb-continue[disabled]{opacity:.5;cursor:default;pointer-events:none}
 .skb-todos{display:flex;flex-direction:column;gap:8px;min-width:0}
 .skb-todo-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .skb-todo-count{flex:none;font-size:11.5px;color:var(--dsw-alias-label-secondary)}
@@ -1578,7 +1650,7 @@ window.__ModuleLoader__.load({
 .skb-notice-box{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1px solid var(--dsw-alias-state-success-primary);background:var(--dsw-alias-bg-layer-1);font-size:12.5px;line-height:18px;color:var(--dsw-alias-state-success-primary)}
 .skb-footer-note{margin:0;padding-top:2px;font-size:11px;line-height:17px;color:var(--dsw-alias-label-secondary)}
 @media (hover:none){.skb-actions{opacity:1}}
-@media (prefers-reduced-motion:reduce){.skb-status.is-running .skb-dot,.skb-skeleton{animation:none}.skb-card,.skb-bar-fill,.skb-actions{transition:none}}
+@media (prefers-reduced-motion:reduce){.skb-status.is-running .skb-dot,.skb-skeleton{animation:none}.skb-card,.skb-bar-fill,.skb-actions,.skb-continue{transition:none}}
 `;
 
     // ------------------------------------------------------------ component
@@ -2708,6 +2780,42 @@ window.__ModuleLoader__.load({
         }
       }, [ctx, boundT]);
 
+      /**
+       * Resume the failed request step of an idle Session.
+       *
+       * The empty-prompt verb is the same Host admission the chat's own "Continue"
+       * action uses: an empty content array requests a new turn only for an eligible
+       * failed, idle Session. The card only shows the action while the host's
+       * continuation projection still reports that step (see `continuationOf`), and
+       * older hosts never register the projection, so the action stays hidden there.
+       */
+      const continueSession = useCallback(async (row) => {
+        setBusyId(row.sessionId);
+        setErrorText(null);
+        try {
+          const service = ctx.sessions;
+          if (!service || typeof service.using !== 'function') {
+            throw new Error(boundT('continue.unavailable'));
+          }
+          const result = await service.using(row.sessionId, { source: CONTINUE_SOURCE }, (reference) => {
+            const session = reference && reference.binding && reference.binding.session;
+            if (!session || typeof session.prompt !== 'function') {
+              throw new Error(boundT('continue.unavailable'));
+            }
+            return session.prompt([], 'queue');
+          });
+          if (!result || result.ok !== true) {
+            throw new Error(remoteErrorText(result) || boundT('continue.rejected'));
+          }
+          showNotice(boundT('continue.started'));
+        } catch (error) {
+          const message = error && error.message ? String(error.message) : String(error);
+          setErrorText(fill(boundT('continue.failed'), { message }));
+        } finally {
+          setBusyId(null);
+        }
+      }, [ctx, boundT, showNotice]);
+
       const copySessionId = useCallback(async (row) => {
         try {
           const text = String(row.sessionId);
@@ -2927,6 +3035,21 @@ window.__ModuleLoader__.load({
             !row.running && row.request && row.request !== row.currentWork
               ? h('p', { key: 'sub', className: 'skb-work-sub' },
                 `${boundT('work.recent')}: ${row.request}`)
+              : null,
+            // A failed step the host can still resume offers one inline action; the
+            // surrounding section is inside the card's open-session hit area, so the
+            // button stops propagation itself.
+            row.canContinue
+              ? h('button', {
+                key: 'continue',
+                type: 'button',
+                className: 'skb-continue',
+                disabled: isBusy,
+                onClick: (event) => {
+                  event.stopPropagation();
+                  continueSession(row);
+                },
+              }, isBusy ? '…' : boundT('action.continue'))
               : null,
           ]),
           h('section', { key: 'todos', className: 'skb-todos' }, [

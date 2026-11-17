@@ -222,12 +222,15 @@ const snapshot = {
           request: '修复 BLE 断连问题',
           reply: '已定位到 StateFlow 滞流',
           turn: 8,
-          endKind: 'completed',
+          endKind: 'error',
           todos: [],
           done: 0,
           total: 0,
           inProgress: 0,
         },
+        // The host's manual-continuation projection: a seq while the last request
+        // step failed and can be resumed, null once it is no longer resumable.
+        conversationContinuation: 1042,
       },
     },
     's-nodetails': {
@@ -238,6 +241,9 @@ const snapshot = {
       parentId: 's-idle',
       updatedAt: now - 3 * 24 * 60 * 60 * 1000,
       cwd: 'F:\\GitLab\\old',
+      // Subagent sessions never offer manual continuation, even when the hint is
+      // present: their prompt route is not the ordinary empty-continuation admission.
+      projectionValues: { conversationContinuation: 7 },
     },
     's-alldone': {
       id: 's-alldone',
@@ -279,7 +285,7 @@ const snapshot = {
           request: '处理六项待办',
           reply: '还在进行',
           turn: 2,
-          endKind: '',
+          endKind: 'error',
           todos: [
             { content: '待办 1', status: 'pending' },
             { content: '待办 2', status: 'pending' },
@@ -291,6 +297,13 @@ const snapshot = {
           done: 0,
           total: 6,
           inProgress: 0,
+        },
+        // The failed step stays reported until the next turn starts, but queued human
+        // input means the host would reject a bare continuation — hide the action.
+        conversationContinuation: 33,
+        inbox: {
+          'next-step': [{ id: 'm-queued', source: { kind: 'user' } }],
+          'next-turn': [],
         },
       },
     },
@@ -318,6 +331,9 @@ const snapshot = {
           total: 6,
           inProgress: 1,
         },
+        // A present-but-null hint is authoritative: this session's failed step is
+        // no longer resumable, so the card must not offer continuation either.
+        conversationContinuation: null,
       },
     },
   },
@@ -356,6 +372,7 @@ const expectedZh = [
   '最近进展',
   '已定位到 StateFlow 滞流',
   '最近任务: 修复 BLE 断连问题',
+  '继续生成',
   '旧会话',
   '新建会话',
   '刷新',
@@ -416,6 +433,14 @@ for (const needle of ['data-side="bottom"', 'data-align="end"']) {
   if (!zhMarkup.includes(needle)) throw new Error(`action tooltip placement missing: ${needle}`);
 }
 if (zhMarkup.includes('title="归档会话"')) throw new Error('legacy title tooltip still rendered for archive');
+// Manual continuation: the host's `conversationContinuation` projection marks a
+// resumable failed request step, so exactly the eligible idle card offers the action
+// (the running card, the subagent card, the queued-input card, the plain cards and the
+// present-but-null hint must not).
+const continueButtons = (zhMarkup.match(/class="skb-continue"/g) || []).length;
+if (continueButtons !== 1) throw new Error(`continue action rendered ${continueButtons} times`);
+if (!zhMarkup.includes('>继续生成</button>')) throw new Error('continue action missing');
+if (!zhMarkup.includes('class="skb-continue"')) throw new Error('continue action class missing');
 // Action icons are copied from the shipped Client UI primitives, not redrawn (the
 // filter tabs themselves are native SegmentedTabs and carry no icons).
 for (const hostPath of [
@@ -438,7 +463,7 @@ if (pinnedTitleAt < 0 || runningTitleAt < 0 || pinnedTitleAt > runningTitleAt) {
 const en = makeContext(snapshot, 'en');
 client.apply(en.ctx);
 const enMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(en.getRegistered()[0].component, { ctx: en.ctx }));
-for (const needle of ['Session Board', '6 sessions · 1 running', 'Current work', 'Latest result', 'With todos', 'All 6 done']) {
+for (const needle of ['Session Board', '6 sessions · 1 running', 'Current work', 'Latest result', 'With todos', 'All 6 done', 'Continue']) {
   if (!enMarkup.includes(needle)) throw new Error(`en markup missing: ${needle}`);
 }
 
@@ -821,6 +846,16 @@ if (panel.options.label() !== '会话看板') throw new Error(`side label wrong:
 const icon = registrations.find((entry) => entry.options.name === 'sidebar.panellist').component;
 const iconMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(icon, { size: 18, active: true }));
 if (!iconMarkup.startsWith('<svg') || !iconMarkup.includes('width="18"')) throw new Error('icon markup wrong');
+
+// Card, stat and overview panel surfaces follow the host's card theme tokens so custom
+// themes recolour them like native cards; the older layer token stays the fallback for
+// hosts that predate the card tokens.
+if (!SOURCE.includes('var(--dsw-alias-card-fill,var(--dsw-alias-bg-layer-1))')) {
+  throw new Error('card theme token fallback missing');
+}
+if (!SOURCE.includes('var(--dsw-alias-card-fill-hover,var(--dsw-alias-bg-layer-1))')) {
+  throw new Error('card hover theme token fallback missing');
+}
 
 console.log('client SSR render OK');
 console.log('zh markup bytes:', zhMarkup.length, '| en markup bytes:', enMarkup.length);
