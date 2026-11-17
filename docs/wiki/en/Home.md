@@ -50,7 +50,8 @@ sidebar. See [Installation](Installation) for local installs, upgrades and unins
   sessions inherit their parent's workspace).
 - **Session relationships**: subagent, team member and fork children show their relation
   kind and parent link; one family shares one accent colour.
-- **Quick actions**: pin, rename, fork, copy Session ID, archive, refresh, new session.
+- **Quick actions**: pin, rename, fork, copy Session ID, archive, refresh, new session; a
+  failed session can be continued directly from its card.
 - **Native look**: reuses the host `Menu` / `Tooltip` / `Button` primitives and General
   settings rows, so light/dark theme changes apply automatically.
 

@@ -39,6 +39,14 @@ Host limitation: sessions owned by subagent routing have their titles managed by
 routing, so the host rejects renames. The plugin disables the action and explains why on
 hover.
 
+## No Continue button on a failed session
+
+- The button needs the `conversationContinuation` session projection added in DSH
+  `0.2.2-rc.2`; older hosts hide it and every other feature keeps working.
+- It only appears while the host reports that the latest request step failed and can still
+  be resumed; it disappears after a successful continuation, a new request, or a recovery.
+- If the host is new enough and it is still missing, fully reload the window.
+
 ## Child sessions are missing under a workspace filter
 
 Since 1.1.4 child sessions inherit their parent's workspace. If something is still missing,

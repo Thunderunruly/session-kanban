@@ -48,6 +48,12 @@ Rendering is based on host UI primitives (`Button` / `Menu` / `Tooltip` / `Input
 - **Detail projections**: sessions whose projection values are not part of the list are
   fetched with `ctx.remote.session.projections`; requests are ordered by recent activity,
   run serially and are budgeted to 200 sessions to avoid flooding large catalogs.
+- **Continuation**: the host `conversationContinuation` projection reports the seq of a
+  failed request step that can still be resumed (`null` when it cannot). Session summaries
+  carry every client-visible projection, so the list hint is the live source and the exact
+  projection read is only a fallback for hints that predate the key; hosts without the
+  projection never show the action. Subagent sessions and sessions with queued human input
+  hide it too, matching the chat composer's own Continue conditions.
 - **Workspaces**: `ctx.workspaces.list` supplies `items` (including each workspace's
   `sessionIds`), `archivedSessionIds` and `pinnedSessionIds`.
 - **Preferences**: `localStorage` — see [Configuration](Configuration).
@@ -80,3 +86,7 @@ Rendering is based on host UI primitives (`Button` / `Menu` / `Tooltip` / `Input
   main view, the host clears the main view, and the plugin reopens the board afterwards via
   `ctx.get('layout').selectPanel(PANEL_ID)`.
 - Fork: `ctx.uiWorkspace.forkSession`, then opens the child session.
+- Continue: `ctx.sessions.using(sessionId, { source: 'dsh-session-kanban' }, ref =>
+  ref.binding.session.prompt([], 'queue'))` — the empty prompt is the same host entry point
+  as the chat's own Continue action and only applies to a failed, idle session. The session
+  reference is released as soon as the callback settles, so it never pins client data.

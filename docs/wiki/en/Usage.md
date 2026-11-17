@@ -57,6 +57,8 @@ current work, latest reply, task text and the working directory. Clear it to res
   **sessions** (the source is only fork provenance), so they show no parent relation and are not
   counted as children; an archived parent keeps its title with an “archived” marker.
 - Current work (running) or latest result (idle), plus the most recent request.
+- When the latest request step failed and the host still reports it as resumable, a
+  **Continue** button appears under the latest result.
 - Todo progress bar and list (up to four items, the rest collapsed).
 - Working directory basename and hover actions.
 
@@ -71,6 +73,7 @@ Hover the card footer to reveal:
 | Fork | Create a new forked session from the latest completed turn |
 | Copy Session ID | Copy the full session id |
 | Archive | Confirmation required; if the archived session is the one held by the main view, the board reopens afterwards |
+| Continue | Only for a session whose latest request step failed and that the host still reports as resumable (shown under the latest result, not in the hover toolbar); resumes that step without opening the session. Requires DSH `0.2.2-rc.2` or newer; older hosts hide it |
 | Refresh / New session | Header buttons |
 
 Keyboard: cards are focusable, Enter / Space opens the session; in the rename field Enter
@@ -81,4 +84,5 @@ commits and Escape cancels.
 - Only clicking the card body opens a session; the footer toolbar does not navigate.
 - Pressing and dragging beyond a threshold, or having a text selection, counts as drag or
   selection and does not open the session.
-- Parent links, action buttons and the archive confirmation stop propagation themselves.
+- Parent links, action buttons, the archive confirmation and the Continue button stop
+  propagation themselves.

@@ -38,6 +38,10 @@ the host at runtime.
 - session relationships (subagent / team member / fork, parent link, child count, family
   accent);
 - disabled rename on subagent sessions plus its hover explanation;
+- the Continue action: shown only for a failed session the host still reports as
+  resumable, never for a `null` hint or a host without the projection;
+- card / stat / overview surfaces using the host card theme tokens (with the older token
+  as fallback);
 - archive visibility, pagination and virtualization behaviour.
 
 ## Debugging
